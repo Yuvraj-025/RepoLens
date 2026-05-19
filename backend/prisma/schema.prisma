@@ -1,0 +1,82 @@
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"]
+}
+
+datasource db {
+  provider   = "postgresql"
+  url        = env("DATABASE_URL")
+  extensions = [vector]
+}
+
+model User {
+  id           String       @id @default(uuid()) @db.Uuid
+  name         String       @db.VarChar(255)
+  email        String       @unique @db.VarChar(255)
+  passwordHash String       @db.VarChar(255)
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+  repositories Repository[]
+  chats        ChatHistory[]
+}
+
+enum RepositoryStatus {
+  pending
+  processing
+  ready
+  error
+}
+
+model Repository {
+  id              String            @id @default(uuid()) @db.Uuid
+  userId          String            @db.Uuid
+  user            User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name            String            @db.VarChar(255)
+  status          RepositoryStatus  @default(pending)
+  fileCount       Int               @default(0)
+  chunkCount      Int               @default(0)
+  primaryLanguage String?           @db.VarChar(100)
+  createdAt       DateTime          @default(now())
+  files           RepositoryFile[]
+  chunks          Chunk[]
+  chats           ChatHistory[]
+}
+
+model RepositoryFile {
+  id           String     @id @default(uuid()) @db.Uuid
+  repositoryId String     @db.Uuid
+  repository   Repository @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
+  filePath     String     @db.VarChar(1024)
+  language     String     @db.VarChar(50)
+  lineCount    Int
+  sizeBytes    Int
+  content      String     @db.Text
+  chunks       Chunk[]
+}
+
+model Chunk {
+  id           String         @id @default(uuid()) @db.Uuid
+  repositoryId String         @db.Uuid
+  repository   Repository     @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
+  fileId       String         @db.Uuid
+  file         RepositoryFile @relation(fields: [fileId], references: [id], onDelete: Cascade)
+  filePath     String         @db.VarChar(1024)
+  language     String         @db.VarChar(50)
+  startLine    Int
+  endLine      Int
+  content      String         @db.Text
+  embedding    Unsupported("vector(768)")?
+  isEmbedded   Boolean        @default(false)
+}
+
+model ChatHistory {
+  id           String     @id @default(uuid()) @db.Uuid
+  repositoryId String     @db.Uuid
+  repository   Repository @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
+  userId       String     @db.Uuid
+  user         User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userQuery    String     @db.Text
+  aiResponse   String     @db.Text
+  sourcesJson  Json       @default("[]")
+  createdAt    DateTime   @default(now())
+}
