@@ -51,6 +51,7 @@ model RepositoryFile {
   lineCount    Int
   sizeBytes    Int
   content      String     @db.Text
+  modifiedAt   DateTime?
   chunks       Chunk[]
 }
 

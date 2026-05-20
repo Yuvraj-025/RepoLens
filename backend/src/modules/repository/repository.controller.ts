@@ -38,4 +38,9 @@ export class RepositoryController {
   async deleteRepository(@Param('id') id: string, @Request() req: any) {
     return this.repositoryService.deleteRepository(id, req.user.id);
   }
+
+  @Get(':id/files')
+  async getRepositoryFiles(@Param('id') id: string, @Request() req: any) {
+    return this.repositoryService.getRepositoryFiles(id, req.user.id);
+  }
 }

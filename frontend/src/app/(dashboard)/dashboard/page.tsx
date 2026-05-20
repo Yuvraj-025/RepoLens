@@ -1,10 +1,10 @@
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Upload, FileCode, CheckCircle, Clock, AlertTriangle } from 'lucide-react';
+import { Upload, FileCode, CheckCircle, Clock, AlertTriangle, Trash2 } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { uploadRepository, getRepositories } from '@/lib/api/repository';
+import { uploadRepository, getRepositories, deleteRepository } from '@/lib/api/repository';
 
 export default function DashboardPage() {
   const router = useRouter();
@@ -14,6 +14,9 @@ export default function DashboardPage() {
   const [uploadError, setUploadError] = useState('');
   const [isUploadingFile, setIsUploadingFile] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const [repoToDelete, setRepoToDelete] = useState<string | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const fetchRepos = async () => {
     try {
@@ -59,6 +62,30 @@ export default function DashboardPage() {
     }
   };
 
+  const handleDeleteClick = (e: React.MouseEvent, id: string) => {
+    e.preventDefault(); // prevent Link navigation
+    e.stopPropagation();
+    setRepoToDelete(id);
+  };
+
+  const confirmDelete = async () => {
+    if (!repoToDelete) return;
+    setIsDeleting(true);
+    try {
+      await deleteRepository(repoToDelete);
+      setRepoToDelete(null);
+      fetchRepos();
+    } catch (err: any) {
+      if (err.message && err.message.includes('401:')) {
+        router.push('/login');
+      } else {
+        alert(err.message || 'Delete failed');
+      }
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
   return (
     <div className="flex flex-col h-full max-w-5xl mx-auto space-y-8">
       <div className="flex justify-between items-end border-b-2 border-retro-green-dim pb-4">
@@ -82,8 +109,17 @@ export default function DashboardPage() {
         {repos.map((repo) => (
           <Link key={repo.id} href={`/repo/${repo.id}`} className="block">
             <div className="border-2 border-retro-green p-6 hover:bg-retro-green/10 transition-colors h-full flex flex-col group relative">
-              <div className="absolute top-0 right-0 p-2 opacity-50 group-hover:opacity-100 transition-opacity">
-                {repo.status === 'ready' ? <CheckCircle className="text-retro-green" /> : <Clock className="text-yellow-500 animate-pulse" />}
+              <div className="absolute top-2 right-2 flex items-center gap-3">
+                <button 
+                  onClick={(e) => handleDeleteClick(e, repo.id)} 
+                  className="text-red-500 hover:text-red-400 transition-all opacity-50 group-hover:opacity-100 hover:scale-110 z-10 p-1"
+                  title="Purge Repository"
+                >
+                  <Trash2 className="w-6 h-6" />
+                </button>
+                <div className="opacity-50 group-hover:opacity-100 transition-opacity">
+                  {repo.status === 'ready' ? <CheckCircle className="text-retro-green w-6 h-6" /> : <Clock className="text-yellow-500 animate-pulse w-6 h-6" />}
+                </div>
               </div>
               
               <h3 className="text-2xl font-bold uppercase mb-4 text-retro-green">{repo.name}</h3>
@@ -146,6 +182,36 @@ export default function DashboardPage() {
                 className="border-2 border-retro-green-dim text-retro-green-dim px-6 py-2 text-xl hover:border-retro-green hover:text-retro-green transition-colors uppercase"
               >
                 Abort
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {repoToDelete && (
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
+          <div className="border-2 border-red-500 bg-retro-bg p-8 max-w-lg w-full shadow-retro shadow-red-500">
+            <h2 className="text-2xl uppercase text-red-500 mb-4 border-b-2 border-red-500/50 pb-2 flex items-center gap-2">
+              <AlertTriangle /> &gt; CONFIRM_DELETION
+            </h2>
+            <p className="text-lg text-red-400 mb-6">
+              WARNING: This action is irreversible. All processed chunks, embeddings, and chat history for this repository will be purged from the database.
+            </p>
+            <div className="flex justify-end gap-4">
+              <button 
+                onClick={() => setRepoToDelete(null)}
+                className="border-2 border-retro-green-dim text-retro-green-dim px-6 py-2 hover:border-retro-green hover:text-retro-green transition-colors uppercase"
+                disabled={isDeleting}
+              >
+                Abort
+              </button>
+              <button 
+                onClick={confirmDelete}
+                className="bg-red-500 text-retro-bg px-6 py-2 font-bold hover:bg-red-400 transition-colors uppercase border-2 border-red-500"
+                disabled={isDeleting}
+              >
+                {isDeleting ? 'PURGING...' : 'CONFIRM_PURGE'}
               </button>
             </div>
           </div>
