@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { signup } from '@/lib/api/auth';
+import Captcha from '@/components/auth/Captcha';
 
 export default function SignupPage() {
   const router = useRouter();
@@ -12,9 +13,15 @@ export default function SignupPage() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [isCaptchaValid, setIsCaptchaValid] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!isCaptchaValid) {
+      setError('CAPTCHA validation failed. Please verify you are human.');
+      return;
+    }
+
     setError('');
     setIsLoading(true);
     
@@ -72,6 +79,8 @@ export default function SignupPage() {
                 placeholder="********" 
               />
             </div>
+            
+            <Captcha onValidate={setIsCaptchaValid} colorTheme="cyan" />
           </div>
           
           <div className="pt-8">

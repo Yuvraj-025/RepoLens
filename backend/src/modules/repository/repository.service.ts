@@ -19,6 +19,28 @@ export class RepositoryService {
     }
 
     const zipEntries = zip.getEntries();
+    
+    // Determine if all files share a single top-level directory
+    let commonRoot: string | null = null;
+    let hasMultipleRoots = false;
+    for (const entry of zipEntries) {
+      if (entry.isDirectory) continue;
+      const pPath = entry.entryName.replace(/\\/g, '/');
+      const parts = pPath.split('/');
+      if (parts.length === 1) {
+        hasMultipleRoots = true;
+        break;
+      }
+      const root = parts[0];
+      if (commonRoot === null) {
+        commonRoot = root;
+      } else if (commonRoot !== root) {
+        hasMultipleRoots = true;
+        break;
+      }
+    }
+    const prefixToRemove = (!hasMultipleRoots && commonRoot) ? commonRoot + '/' : '';
+
     let totalUncompressedSize = 0;
     const MAX_UNCOMPRESSED_SIZE = 200 * 1024 * 1024; // 200 MB limit
     let validFileCount = 0;
@@ -28,14 +50,22 @@ export class RepositoryService {
     for (const entry of zipEntries) {
       if (entry.isDirectory) continue;
 
-      // Zip Slip Prevention: ensure paths do not contain '..' or are absolute
-      const sanitizedPath = path.normalize(entry.entryName);
-      if (sanitizedPath.includes('..') || path.isAbsolute(sanitizedPath)) {
+      // Zip Slip Prevention: ensure paths do not contain '..' or are absolute (checked on original name)
+      const originalSanitized = path.normalize(entry.entryName);
+      if (originalSanitized.includes('..') || path.isAbsolute(originalSanitized)) {
         throw new BadRequestException(`Malicious path detected in ZIP: ${entry.entryName}`);
       }
 
+      let posixEntryName = entry.entryName.replace(/\\/g, '/');
+      if (prefixToRemove && posixEntryName.startsWith(prefixToRemove)) {
+        posixEntryName = posixEntryName.substring(prefixToRemove.length);
+      }
+
+      const sanitizedPath = path.normalize(posixEntryName);
+
+      const posixPath = sanitizedPath.replace(/\\/g, '/');
       // Ignore common build directories and hidden folders
-      if (sanitizedPath.includes('node_modules/') || sanitizedPath.includes('.git/') || sanitizedPath.includes('dist/') || sanitizedPath.includes('build/') || sanitizedPath.includes('__pycache__/')) {
+      if (posixPath.includes('node_modules/') || posixPath.includes('/.git') || posixPath.startsWith('.git') || posixPath.includes('dist/') || posixPath.includes('build/') || posixPath.includes('__pycache__/')) {
         continue;
       }
 
@@ -54,8 +84,15 @@ export class RepositoryService {
 
       // Only extract text content if it's a valid text file under the size limit
       if (!isBinaryOrLock && !isTooLarge && entry.header.size <= 5 * 1024 * 1024) {
-        content = entry.getData().toString('utf-8');
-        lineCount = content.split('\n').length;
+        const rawContent = entry.getData().toString('utf-8');
+        // Prevent Postgres "invalid byte sequence for encoding UTF8: 0x00" 
+        // by detecting null bytes. If present, it's likely a binary file.
+        if (rawContent.includes('\0')) {
+          content = ''; // Treat as binary, skip content
+        } else {
+          content = rawContent;
+          lineCount = content.split('\n').length;
+        }
       }
 
       let fileDate = new Date();
@@ -66,13 +103,30 @@ export class RepositoryService {
 
       validFileCount++;
       filesToCreate.push({
-        filePath: sanitizedPath,
+        filePath: posixPath,
         language: ext.replace('.', '') || (isBinaryOrLock ? 'binary' : 'text'),
         lineCount: lineCount,
         sizeBytes: entry.header.size,
         content: content,
         modifiedAt: fileDate
       });
+    }
+
+    // Determine primary language based on bytes
+    const languageCounts: Record<string, number> = {};
+    for (const file of filesToCreate) {
+      if (file.language !== 'binary' && file.language !== 'text') {
+        languageCounts[file.language] = (languageCounts[file.language] || 0) + file.sizeBytes;
+      }
+    }
+    
+    let primaryLanguage = 'unknown';
+    let maxBytes = 0;
+    for (const [lang, bytes] of Object.entries(languageCounts)) {
+      if (bytes > maxBytes) {
+        maxBytes = bytes;
+        primaryLanguage = lang;
+      }
     }
 
     // Register the repository in the DB
@@ -83,6 +137,7 @@ export class RepositoryService {
         status: 'ready', // Marked as ready so we can view files in the explorer immediately
         fileCount: validFileCount,
         chunkCount: 0,
+        primaryLanguage,
         files: {
           create: filesToCreate
         }
