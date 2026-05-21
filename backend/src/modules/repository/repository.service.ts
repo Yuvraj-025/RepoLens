@@ -190,4 +190,15 @@ export class RepositoryService {
       orderBy: { filePath: 'asc' }
     });
   }
+
+  async getRepositoryFile(id: string, fileId: string, userId: string) {
+    await this.getRepository(id, userId); // Ensures user owns the repo
+    const file = await this.prisma.repositoryFile.findFirst({
+      where: { id: fileId, repositoryId: id }
+    });
+    if (!file) {
+      throw new NotFoundException('File not found');
+    }
+    return file;
+  }
 }

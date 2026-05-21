@@ -40,8 +40,12 @@ export default function SignupPage() {
       <div className="w-full max-w-2xl border-2 border-retro-cyan p-10 shadow-retro shadow-retro-cyan bg-retro-bg relative">
         <div className="absolute top-0 right-0 p-3 text-2xl text-retro-cyan opacity-50">SYS_INIT_NODE</div>
         <h2 className="text-5xl text-retro-cyan mb-4 uppercase tracking-wider">&gt; REGISTER</h2>
-        <p className="text-2xl text-retro-green-dim mb-10">
-          INITIALIZE NEW INSTANCE... OR <Link href="/login" className="text-retro-green hover:underline hover:text-white">RETURN_TO_LOGIN</Link>
+        <p className="text-2xl text-retro-green-dim mb-10 flex flex-wrap gap-x-4">
+          <span>INITIALIZE NEW INSTANCE...</span>
+          <span className="text-retro-cyan/30">|</span>
+          <Link href="/login" className="text-retro-green hover:underline hover:text-white">RETURN_TO_LOGIN</Link>
+          <span className="text-retro-cyan/30">|</span>
+          <Link href="/" className="text-retro-cyan hover:underline hover:text-white">EXIT_TO_LANDING</Link>
         </p>
 
         {error && (

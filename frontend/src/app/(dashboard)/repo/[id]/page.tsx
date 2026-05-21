@@ -1,9 +1,9 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { getRepositoryDetails, getRepositoryFiles } from '@/lib/api/repository';
-import { Folder, FileCode, HardDrive, Cpu, Terminal, Send, ChevronRight } from 'lucide-react';
+import { getRepositoryDetails, getRepositoryFiles, getRepositoryFile } from '@/lib/api/repository';
+import { Folder, FileCode, HardDrive, Cpu, Terminal, Send, ChevronRight, Maximize2, X } from 'lucide-react';
 
 export default function RepositoryDashboard() {
   const params = useParams();
@@ -19,6 +19,139 @@ export default function RepositoryDashboard() {
     { role: 'system', content: 'INITIALIZING AI LINK... READY. AWAITING QUERY.' }
   ]);
   const [chatInput, setChatInput] = useState('');
+
+  const [isExpandedView, setIsExpandedView] = useState(false);
+  const [expandedFolders, setExpandedFolders] = useState<Record<string, boolean>>({});
+  const [selectedFile, setSelectedFile] = useState<any>(null);
+  const [selectedFileContent, setSelectedFileContent] = useState<string>('');
+  const [isFileLoading, setIsFileLoading] = useState(false);
+
+  const toggleFolder = (path: string) => {
+    setExpandedFolders(prev => ({
+      ...prev,
+      [path]: !prev[path]
+    }));
+  };
+
+  const handleViewFile = async (file: any) => {
+    setIsFileLoading(true);
+    setSelectedFile(file);
+    try {
+      const fileDetails = await getRepositoryFile(id, file.id);
+      setSelectedFileContent(fileDetails.content);
+    } catch (err: any) {
+      setSelectedFileContent(`ERROR LOADING FILE: ${err.message}`);
+    } finally {
+      setIsFileLoading(false);
+    }
+  };
+
+  const fileTree = useMemo(() => {
+    const root: any = { name: 'root', path: '', isDirectory: true, children: {} };
+    
+    files.forEach(file => {
+      const parts = file.filePath.split('/');
+      let current = root;
+      let currentPath = '';
+      
+      parts.forEach((part, index) => {
+        currentPath = currentPath ? `${currentPath}/${part}` : part;
+        const isLast = index === parts.length - 1;
+        
+        if (!current.children[part]) {
+          current.children[part] = {
+            name: part,
+            path: currentPath,
+            isDirectory: !isLast,
+            children: {},
+            ...(isLast ? file : {})
+          };
+        }
+        current = current.children[part];
+      });
+    });
+    
+    return root;
+  }, [files]);
+
+  const renderCodeWithLineNumbers = (code: string) => {
+    if (!code) return <p className="text-retro-green-dim italic p-6 font-mono">&gt; [BINARY FILE OR EMPTY CONTENT]</p>;
+    const lines = code.split('\n');
+    return (
+      <div className="flex font-mono text-sm h-full overflow-y-auto scrollbar-thin select-none">
+        <div className="text-right pr-4 text-retro-green/45 border-r border-retro-green/20 select-none bg-retro-bg/50 sticky left-0 py-2 min-w-[3rem]">
+          {lines.map((_, idx) => (
+            <div key={idx} className="h-6 leading-6">{idx + 1}</div>
+          ))}
+        </div>
+        <div className="pl-4 text-retro-green select-text py-2 overflow-x-auto whitespace-pre leading-6 flex-1">
+          {lines.map((line, idx) => (
+            <div key={idx} className="h-6 hover:bg-retro-green/10 transition-colors whitespace-pre pr-4">{line || ' '}</div>
+          ))}
+        </div>
+      </div>
+    );
+  };
+
+  const renderTreeNode = (node: any, level = 0) => {
+    const isExpanded = !!expandedFolders[node.path];
+    
+    if (!node.isDirectory) {
+      const isSelected = selectedFile?.id === node.id;
+      return (
+        <div 
+          key={node.id} 
+          className={`flex justify-between items-center group p-1.5 cursor-default transition-colors border-b border-retro-green/10 last:border-0 font-mono text-sm ${isSelected ? 'bg-retro-green/20' : 'hover:bg-retro-green/10'}`} 
+          style={{ paddingLeft: `${level * 1.2 + 0.5}rem` }}
+        >
+          <div className="flex items-center gap-2 truncate pr-4">
+            <FileCode className={`w-4 h-4 flex-shrink-0 ${isSelected ? 'text-retro-cyan' : 'text-retro-green'}`} />
+            <span className={`truncate text-sm ${isSelected ? 'text-retro-cyan font-bold' : 'text-retro-green'}`} title={node.name}>
+              {node.name}
+            </span>
+          </div>
+          <div className="text-xs text-retro-green-dim flex-shrink-0 flex items-center gap-3">
+            <span className="w-12 truncate text-right hidden sm:inline">{node.language}</span>
+            <span className="w-16 text-right hidden md:inline">{formatSize(node.sizeBytes)}</span>
+            <button 
+              onClick={() => handleViewFile(node)}
+              className={`px-2 py-0.5 border text-xs uppercase transition-colors font-semibold ${
+                isSelected 
+                  ? 'border-retro-cyan text-retro-bg bg-retro-cyan hover:bg-transparent hover:text-retro-cyan' 
+                  : 'border-retro-green text-retro-green hover:bg-retro-green hover:text-retro-bg'
+              }`}
+            >
+              View()
+            </button>
+          </div>
+        </div>
+      );
+    }
+    
+    const childrenKeys = Object.keys(node.children).sort((a, b) => {
+      const childA = node.children[a];
+      const childB = node.children[b];
+      if (childA.isDirectory && !childB.isDirectory) return -1;
+      if (!childA.isDirectory && childB.isDirectory) return 1;
+      return a.localeCompare(b);
+    });
+    
+    return (
+      <div key={node.path}>
+        <div 
+          onClick={() => toggleFolder(node.path)}
+          className="flex items-center gap-2 hover:bg-retro-green/5 p-1.5 cursor-pointer border-b border-retro-green/10 last:border-0 font-mono text-sm" 
+          style={{ paddingLeft: `${level * 1.2 + 0.5}rem` }}
+        >
+          <ChevronRight className={`w-3 h-3 text-retro-green-dim transition-transform ${isExpanded ? 'rotate-90' : ''}`} />
+          <Folder className="w-4 h-4 text-retro-cyan flex-shrink-0" />
+          <span className="font-semibold text-retro-cyan truncate">{node.name}</span>
+          <span className="text-xs text-retro-green-dim ml-auto hidden sm:inline">({childrenKeys.length})</span>
+        </div>
+        {isExpanded && childrenKeys.map(key => renderTreeNode(node.children[key], level + 1))}
+      </div>
+    );
+  };
 
   useEffect(() => {
     const loadData = async () => {
@@ -108,9 +241,18 @@ export default function RepositoryDashboard() {
         
         {/* File Explorer Panel */}
         <div className="md:w-1/3 border-2 border-retro-green flex flex-col h-full bg-retro-bg overflow-hidden shadow-[4px_4px_0_0_#00ff41]">
-          <div className="border-b-2 border-retro-green p-3 bg-retro-green/20 flex items-center gap-2">
-            <Folder className="w-5 h-5" />
-            <h2 className="uppercase tracking-widest text-lg">SYS.TREE()</h2>
+          <div className="border-b-2 border-retro-green p-3 bg-retro-green/20 flex justify-between items-center">
+            <div className="flex items-center gap-2">
+              <Folder className="w-5 h-5" />
+              <h2 className="uppercase tracking-widest text-lg">SYS.TREE()</h2>
+            </div>
+            <button 
+              onClick={() => setIsExpandedView(true)}
+              className="p-1 border border-retro-green text-retro-green hover:bg-retro-green hover:text-retro-bg transition-colors"
+              title="Expand Workspace"
+            >
+              <Maximize2 className="w-4 h-4" />
+            </button>
           </div>
           
           <div className="flex-1 overflow-y-auto p-4 space-y-1 scrollbar-thin scrollbar-thumb-retro-green scrollbar-track-transparent">
@@ -180,6 +322,114 @@ export default function RepositoryDashboard() {
         </div>
 
       </div>
+
+      {/* Fullscreen Workspace Modal */}
+      {isExpandedView && (
+        <div className="fixed inset-0 z-50 bg-retro-bg/95 backdrop-blur-sm p-4 md:p-6 flex flex-col font-mono">
+          {/* Modal Header */}
+          <div className="border-2 border-retro-green bg-retro-bg/90 p-4 mb-4 flex justify-between items-center shadow-retro shadow-retro-green">
+            <div className="flex items-center gap-3">
+              <Terminal className="text-retro-green w-6 h-6 animate-pulse" />
+              <h2 className="text-xl md:text-2xl uppercase tracking-widest text-retro-green font-bold">
+                WORKSPACE_EXPLORER_V1.0 // {repo.name}
+              </h2>
+            </div>
+            <button 
+              onClick={() => {
+                setIsExpandedView(false);
+                setSelectedFile(null);
+                setSelectedFileContent('');
+              }}
+              className="p-2 border-2 border-retro-green text-retro-green hover:bg-retro-green hover:text-retro-bg transition-colors"
+              title="Exit workspace explorer"
+            >
+              <X className="w-6 h-6" />
+            </button>
+          </div>
+
+          {/* Modal Content - Split View */}
+          <div className="flex-1 flex flex-col md:flex-row gap-6 min-h-0">
+            {/* Left Column: Folder Tree Explorer */}
+            <div className="flex-1 md:flex-[0.35] border-2 border-retro-green flex flex-col bg-retro-bg overflow-hidden shadow-retro shadow-retro-green">
+              <div className="border-b-2 border-retro-green p-3 bg-retro-green/20 flex justify-between items-center">
+                <div className="flex items-center gap-2">
+                  <Folder className="w-5 h-5 text-retro-green" />
+                  <span className="uppercase tracking-widest text-base font-bold text-retro-green">FILE_HIERARCHY</span>
+                </div>
+                <button 
+                  onClick={() => {
+                    const allExpanded: Record<string, boolean> = {};
+                    const expandAll = (node: any) => {
+                      if (node.isDirectory) {
+                        allExpanded[node.path] = true;
+                        Object.keys(node.children).forEach(key => expandAll(node.children[key]));
+                      }
+                    };
+                    expandAll(fileTree);
+                    setExpandedFolders(allExpanded);
+                  }}
+                  className="px-2 py-0.5 border border-retro-green text-retro-green hover:bg-retro-green hover:text-retro-bg text-xs uppercase"
+                >
+                  EXPAND_ALL
+                </button>
+              </div>
+              
+              <div className="flex-1 overflow-y-auto p-4 space-y-1 scrollbar-thin scrollbar-thumb-retro-green scrollbar-track-transparent">
+                {Object.keys(fileTree.children).length === 0 ? (
+                  <p className="text-retro-green-dim italic">&gt; NO FILES DETECTED</p>
+                ) : (
+                  Object.keys(fileTree.children).sort((a, b) => {
+                    const childA = fileTree.children[a];
+                    const childB = fileTree.children[b];
+                    if (childA.isDirectory && !childB.isDirectory) return -1;
+                    if (!childA.isDirectory && childB.isDirectory) return 1;
+                    return a.localeCompare(b);
+                  }).map(key => renderTreeNode(fileTree.children[key], 0))
+                )}
+              </div>
+            </div>
+
+            {/* Right Column: Code Viewer */}
+            <div className="flex-1 md:flex-[0.65] border-2 border-retro-green flex flex-col bg-retro-bg overflow-hidden shadow-retro shadow-retro-green">
+              <div className="border-b-2 border-retro-green p-3 bg-retro-green/20 flex justify-between items-center">
+                <div className="flex items-center gap-2 truncate pr-4">
+                  <FileCode className="w-5 h-5 text-retro-green flex-shrink-0" />
+                  <span className="uppercase tracking-widest text-base font-bold text-retro-cyan truncate">
+                    {selectedFile ? selectedFile.filePath : 'LIVE_VIEWER_OFFLINE'}
+                  </span>
+                </div>
+                {selectedFile && (
+                  <div className="text-xs text-retro-green-dim flex-shrink-0 flex gap-4">
+                    <span>LANG: {selectedFile.language?.toUpperCase()}</span>
+                    <span>SIZE: {formatSize(selectedFile.sizeBytes)}</span>
+                  </div>
+                )}
+              </div>
+
+              <div className="flex-1 bg-[#020202] relative overflow-hidden">
+                {isFileLoading ? (
+                  <div className="absolute inset-0 flex flex-col items-center justify-center bg-retro-bg/90 z-20">
+                    <div className="w-12 h-12 border-4 border-retro-green border-t-transparent animate-spin mb-4" />
+                    <p className="text-retro-green animate-pulse">&gt; STREAMING_FILE_DATA...</p>
+                  </div>
+                ) : selectedFile ? (
+                  <div className="h-full overflow-hidden">
+                    {renderCodeWithLineNumbers(selectedFileContent)}
+                  </div>
+                ) : (
+                  <div className="flex flex-col items-center justify-center h-full text-retro-green-dim space-y-4 p-8 text-center select-none">
+                    <Terminal className="w-16 h-16 opacity-30 animate-pulse" />
+                    <div>
+                      <p className="text-lg uppercase tracking-wider font-bold text-retro-green">Awaiting Target Selection...</p>
+                      <p className="text-sm opacity-65 mt-2 text-retro-green/70">CLICK [VIEW()] ON ANY FILE FROM THE HIERARCHY TO INITIALIZE DECRYPTION.</p>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

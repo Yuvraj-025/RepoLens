@@ -2,11 +2,29 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, notFound } from 'next/navigation';
 import { Terminal, Folder, User, LogOut } from 'lucide-react';
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
+  const [isAuthorized, setIsAuthorized] = React.useState<boolean | null>(null);
+
+  React.useEffect(() => {
+    const token = localStorage.getItem('accessToken');
+    if (!token) {
+      setIsAuthorized(false);
+    } else {
+      setIsAuthorized(true);
+    }
+  }, []);
+
+  if (isAuthorized === false) {
+    notFound();
+  }
+
+  if (isAuthorized === null) {
+    return null; // or a loading spinner
+  }
 
   const handleDisconnect = () => {
     localStorage.removeItem('accessToken');

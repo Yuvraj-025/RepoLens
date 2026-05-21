@@ -42,8 +42,12 @@ export default function LoginPage() {
       <div className="w-full max-w-2xl border-2 border-retro-green p-10 shadow-retro shadow-retro-green bg-retro-bg relative">
         <div className="absolute top-0 right-0 p-3 text-2xl text-retro-green-dim">SYS_AUTH_NODE</div>
         <h2 className="text-5xl text-retro-cyan mb-4 uppercase tracking-wider">&gt; IDENTIFY</h2>
-        <p className="text-2xl text-retro-green-dim mb-10">
-          AWAITING CREDENTIALS... OR <Link href="/signup" className="text-retro-cyan hover:underline hover:text-white">CREATE_NEW</Link>
+        <p className="text-2xl text-retro-green-dim mb-10 flex flex-wrap gap-x-4">
+          <span>AWAITING CREDENTIALS...</span>
+          <span className="text-retro-green/30">|</span>
+          <Link href="/signup" className="text-retro-cyan hover:underline hover:text-white">CREATE_NEW</Link>
+          <span className="text-retro-green/30">|</span>
+          <Link href="/" className="text-retro-green hover:underline hover:text-white">EXIT_TO_LANDING</Link>
         </p>
 
         {error && (

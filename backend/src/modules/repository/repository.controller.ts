@@ -43,4 +43,13 @@ export class RepositoryController {
   async getRepositoryFiles(@Param('id') id: string, @Request() req: any) {
     return this.repositoryService.getRepositoryFiles(id, req.user.id);
   }
+
+  @Get(':id/files/:fileId')
+  async getRepositoryFile(
+    @Param('id') id: string,
+    @Param('fileId') fileId: string,
+    @Request() req: any,
+  ) {
+    return this.repositoryService.getRepositoryFile(id, fileId, req.user.id);
+  }
 }

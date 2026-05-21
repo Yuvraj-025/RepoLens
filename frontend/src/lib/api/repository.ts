@@ -69,6 +69,22 @@ export async function getRepositoryFiles(id: string) {
   return res.json();
 }
 
+export async function getRepositoryFile(id: string, fileId: string) {
+  const token = localStorage.getItem('accessToken');
+  const res = await fetch(`${API_URL}/repository/${id}/files/${fileId}`, {
+    headers: {
+      'Authorization': `Bearer ${token}`
+    }
+  });
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    if (res.status === 401) throw new Error('401: Unauthorized');
+    throw new Error(err.message || 'Failed to fetch repository file details');
+  }
+  return res.json();
+}
+
 export async function deleteRepository(id: string) {
   const token = localStorage.getItem('accessToken');
   const res = await fetch(`${API_URL}/repository/${id}`, {
