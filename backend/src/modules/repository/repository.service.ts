@@ -2,10 +2,16 @@ import { Injectable, NotFoundException, BadRequestException } from '@nestjs/comm
 import { PrismaService } from '../../prisma/prisma.service';
 import * as AdmZip from 'adm-zip';
 import * as path from 'path';
+import { ParsingService } from '../parsing/parsing.service';
+import { EmbeddingService } from '../embedding/embedding.service';
 
 @Injectable()
 export class RepositoryService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private parsingService: ParsingService,
+    private embeddingService: EmbeddingService,
+  ) {}
 
   async uploadRepository(file: Express.Multer.File, userId: string) {
     const repoName = file.originalname.replace('.zip', '');
@@ -134,7 +140,7 @@ export class RepositoryService {
       data: {
         userId,
         name: repoName,
-        status: 'ready', // Marked as ready so we can view files in the explorer immediately
+        status: 'processing', // Mark as processing initially
         fileCount: validFileCount,
         chunkCount: 0,
         primaryLanguage,
@@ -144,7 +150,33 @@ export class RepositoryService {
       }
     });
 
-    return { repositoryId: repository.id, status: repository.status };
+    try {
+      // 1. Chunking
+      const chunks = await this.parsingService.chunkRepositoryFiles(repository.id);
+
+      // 2. Embedding
+      if (chunks.length > 0) {
+        await this.embeddingService.generateEmbeddingsForRepository(repository.id);
+      }
+
+      // 3. Mark as ready
+      const updated = await this.prisma.repository.update({
+        where: { id: repository.id },
+        data: {
+          status: 'ready',
+          chunkCount: chunks.length
+        }
+      });
+      return { repositoryId: updated.id, status: updated.status };
+    } catch (error) {
+      await this.prisma.repository.update({
+        where: { id: repository.id },
+        data: {
+          status: 'error'
+        }
+      }).catch(() => {});
+      throw error;
+    }
   }
 
   async getRepositories(userId: string) {

@@ -1,8 +1,9 @@
 'use client';
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { getRepositoryDetails, getRepositoryFiles, getRepositoryFile } from '@/lib/api/repository';
+import { getChatHistory, clearChatHistory, queryRepositoryStream } from '@/lib/api/chat';
 import { Folder, FileCode, HardDrive, Cpu, Terminal, Send, ChevronRight, Maximize2, X } from 'lucide-react';
 
 export default function RepositoryDashboard() {
@@ -15,10 +16,16 @@ export default function RepositoryDashboard() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
 
-  const [chatMessages, setChatMessages] = useState<{role: string, content: string}[]>([
-    { role: 'system', content: 'INITIALIZING AI LINK... READY. AWAITING QUERY.' }
-  ]);
+  interface ChatMessage {
+    role: string;
+    content: string;
+    sources?: { chunkId: string; filePath: string; startLine: number; endLine: number }[];
+  }
+
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [chatInput, setChatInput] = useState('');
+  const [isSending, setIsSending] = useState(false);
+  const chatEndRef = useRef<HTMLDivElement>(null);
 
   const [isExpandedView, setIsExpandedView] = useState(false);
   const [expandedFolders, setExpandedFolders] = useState<Record<string, boolean>>({});
@@ -154,6 +161,10 @@ export default function RepositoryDashboard() {
   };
 
   useEffect(() => {
+    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [chatMessages]);
+
+  useEffect(() => {
     const loadData = async () => {
       try {
         const repoData = await getRepositoryDetails(id);
@@ -161,6 +172,21 @@ export default function RepositoryDashboard() {
         
         const filesData = await getRepositoryFiles(id);
         setFiles(filesData);
+
+        const history = await getChatHistory(id);
+        const transformed: ChatMessage[] = [];
+        history.forEach((h: any) => {
+          transformed.push({ role: 'user', content: h.userQuery });
+          transformed.push({ role: 'assistant', content: h.aiResponse, sources: h.sourcesJson });
+        });
+        
+        if (transformed.length === 0) {
+          setChatMessages([
+            { role: 'assistant', content: 'INITIALIZING AI LINK... READY. AWAITING QUERY.' }
+          ]);
+        } else {
+          setChatMessages(transformed);
+        }
       } catch (err: any) {
         if (err.message && err.message.includes('401:')) {
           router.push('/login');
@@ -175,16 +201,84 @@ export default function RepositoryDashboard() {
     loadData();
   }, [id, router]);
 
-  const handleSendMessage = (e: React.FormEvent) => {
+  const handleClearHistory = async () => {
+    if (!confirm('Are you sure you want to clear the chat log?')) return;
+    try {
+      await clearChatHistory(id);
+      setChatMessages([
+        { role: 'assistant', content: 'CHAT LOGS PURGED. AWAITING QUERY.' }
+      ]);
+    } catch (err: any) {
+      alert(`Failed to clear chat log: ${err.message}`);
+    }
+  };
+
+  const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!chatInput.trim()) return;
+    if (!chatInput.trim() || isSending) return;
     
+    const userQuery = chatInput.trim();
+    setChatInput('');
+    setIsSending(true);
+
     setChatMessages(prev => [
       ...prev,
-      { role: 'user', content: chatInput },
-      { role: 'system', content: 'PROCESSING QUERY... [CONNECTION TO GEMINI PENDING]' }
+      { role: 'user', content: userQuery },
+      { role: 'assistant', content: 'RETRIEVING CONTEXT...' }
     ]);
-    setChatInput('');
+
+    try {
+      let currentContent = '';
+      let sourcesReceived: any[] = [];
+
+      await queryRepositoryStream(id, userQuery, (msg) => {
+        if (msg.type === 'sources') {
+          sourcesReceived = msg.sources || [];
+          setChatMessages(prev => {
+            const updated = [...prev];
+            const last = updated[updated.length - 1];
+            if (last) {
+              last.sources = sourcesReceived;
+            }
+            return updated;
+          });
+        } else if (msg.type === 'content') {
+          if (currentContent === '' || currentContent === 'RETRIEVING CONTEXT...') {
+            currentContent = msg.content || '';
+          } else {
+            currentContent += msg.content || '';
+          }
+          setChatMessages(prev => {
+            const updated = [...prev];
+            const last = updated[updated.length - 1];
+            if (last) {
+              last.content = currentContent;
+            }
+            return updated;
+          });
+        } else if (msg.type === 'error') {
+          setChatMessages(prev => {
+            const updated = [...prev];
+            const last = updated[updated.length - 1];
+            if (last) {
+              last.content = `[ERROR: ${msg.message || 'Stream disrupted'}]`;
+            }
+            return updated;
+          });
+        }
+      });
+    } catch (err: any) {
+      setChatMessages(prev => {
+        const updated = [...prev];
+        const last = updated[updated.length - 1];
+        if (last) {
+          last.content = `[CONNECTION ERROR: ${err.message || 'Failed to contact AI server'}]`;
+        }
+        return updated;
+      });
+    } finally {
+      setIsSending(false);
+    }
   };
 
   if (isLoading) {
@@ -282,9 +376,17 @@ export default function RepositoryDashboard() {
           {/* CRT Scanline overlay just for this panel */}
           <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(rgba(18,16,16,0)_50%,rgba(0,0,0,0.25)_50%),linear-gradient(90deg,rgba(255,0,0,0.06),rgba(0,255,0,0.02),rgba(0,0,255,0.06))] bg-[length:100%_4px,3px_100%] z-10 opacity-20" />
           
-          <div className="border-b-2 border-retro-green p-3 bg-retro-green/20 flex items-center gap-2">
-            <Terminal className="w-5 h-5" />
-            <h2 className="uppercase tracking-widest text-lg">AI_LINK_ESTABLISHED</h2>
+          <div className="border-b-2 border-retro-green p-3 bg-retro-green/20 flex items-center justify-between z-20">
+            <div className="flex items-center gap-2">
+              <Terminal className="w-5 h-5" />
+              <h2 className="uppercase tracking-widest text-lg">AI_LINK_ESTABLISHED</h2>
+            </div>
+            <button 
+              onClick={handleClearHistory}
+              className="px-2 py-0.5 border border-retro-green text-retro-green hover:bg-retro-green hover:text-retro-bg text-xs uppercase font-bold"
+            >
+              CLEAR_LOGS()
+            </button>
           </div>
           
           <div className="flex-1 overflow-y-auto p-6 space-y-6 flex flex-col font-mono">
@@ -293,11 +395,38 @@ export default function RepositoryDashboard() {
                 <span className="text-xs text-retro-green-dim mb-1 uppercase tracking-wider">
                   {msg.role === 'user' ? 'USER_INPUT' : 'SYS_RESPONSE'}
                 </span>
-                <div className={`p-4 border-2 ${msg.role === 'user' ? 'border-retro-cyan bg-retro-cyan/10 text-retro-cyan' : 'border-retro-green bg-retro-green/5 text-retro-green'}`}>
+                <div className={`p-4 border-2 ${msg.role === 'user' ? 'border-retro-cyan bg-retro-cyan/10 text-white' : 'border-retro-green bg-retro-green/5 text-gray-100'}`}>
                   <p className="whitespace-pre-wrap">{msg.content}</p>
+                  
+                  {msg.sources && msg.sources.length > 0 && (
+                    <div className="mt-3 pt-3 border-t border-retro-green/20 text-xs">
+                      <span className="text-retro-green-dim font-bold uppercase tracking-wider block mb-1">RETRIEVED_SOURCES:</span>
+                      <div className="flex flex-wrap gap-2">
+                        {msg.sources.map((src, idx) => (
+                          <button
+                            key={idx}
+                            onClick={() => {
+                              const file = files.find(f => f.filePath === src.filePath);
+                              if (file) {
+                                setIsExpandedView(true);
+                                handleViewFile(file);
+                              } else {
+                                alert(`File ${src.filePath} not found in repository files.`);
+                              }
+                            }}
+                            title={src.filePath}
+                            className="px-2 py-1 border border-retro-green/45 hover:border-retro-cyan hover:text-retro-cyan bg-retro-green/10 text-retro-green transition-colors font-mono text-[11px]"
+                          >
+                            {src.filePath.split('/').pop()} (L{src.startLine}-{src.endLine})
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
             ))}
+            <div ref={chatEndRef} />
           </div>
 
           <div className="border-t-2 border-retro-green p-4 bg-retro-bg z-20">
@@ -307,12 +436,13 @@ export default function RepositoryDashboard() {
                 type="text"
                 value={chatInput}
                 onChange={(e) => setChatInput(e.target.value)}
-                placeholder="Query the codebase..."
+                placeholder={isSending ? "AI is generating response..." : "Query the codebase..."}
+                disabled={isSending}
                 className="flex-1 bg-transparent border-b-2 border-retro-green/50 focus:border-retro-green text-retro-green placeholder:text-retro-green/30 px-2 py-2 outline-none font-mono"
               />
               <button 
                 type="submit" 
-                disabled={!chatInput.trim()}
+                disabled={!chatInput.trim() || isSending}
                 className="p-3 border-2 border-retro-green text-retro-green hover:bg-retro-green hover:text-retro-bg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <Send className="w-5 h-5" />
