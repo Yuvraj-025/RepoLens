@@ -4,7 +4,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { getRepositoryDetails, getRepositoryFiles, getRepositoryFile, getRepositorySummary } from '@/lib/api/repository';
 import { getChatHistory, clearChatHistory, queryRepositoryStream } from '@/lib/api/chat';
-import { Folder, FileCode, HardDrive, Cpu, Terminal, Send, ChevronRight, Maximize2, X, Info } from 'lucide-react';
+import { Folder, FileCode, HardDrive, Cpu, Terminal, Send, ChevronRight, Maximize2, Minimize2, X, Info } from 'lucide-react';
 import Editor from '@monaco-editor/react';
 
 export default function RepositoryDashboard() {
@@ -29,6 +29,7 @@ export default function RepositoryDashboard() {
   const chatEndRef = useRef<HTMLDivElement>(null);
 
   const [isExpandedView, setIsExpandedView] = useState(false);
+  const [isChatFullscreen, setIsChatFullscreen] = useState(false);
   const [expandedFolders, setExpandedFolders] = useState<Record<string, boolean>>({});
   const [selectedFile, setSelectedFile] = useState<any>(null);
   const [selectedFileContent, setSelectedFileContent] = useState<string>('');
@@ -444,7 +445,7 @@ export default function RepositoryDashboard() {
       <div className="flex-1 flex flex-col md:flex-row gap-6 min-h-0">
         
         {/* File Explorer Panel */}
-        <div className="md:w-1/3 border-2 border-retro-green flex flex-col h-full bg-retro-bg overflow-hidden shadow-[4px_4px_0_0_#00ff41]">
+        <div className={`md:w-1/3 border-2 border-retro-green flex flex-col h-full bg-retro-bg overflow-hidden shadow-[4px_4px_0_0_#00ff41] ${isChatFullscreen ? 'hidden' : 'flex'}`}>
           <div className="border-b-2 border-retro-green p-3 bg-retro-green/20 flex justify-between items-center">
             <div className="flex items-center gap-2">
               <Folder className="w-5 h-5" />
@@ -482,82 +483,102 @@ export default function RepositoryDashboard() {
         </div>
 
         {/* Chat Panel */}
-        <div className="md:w-2/3 border-2 border-retro-green flex flex-col h-full bg-retro-bg shadow-[4px_4px_0_0_#00ff41] relative overflow-hidden">
-          {/* CRT Scanline overlay just for this panel */}
-          <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(rgba(18,16,16,0)_50%,rgba(0,0,0,0.25)_50%),linear-gradient(90deg,rgba(255,0,0,0.06),rgba(0,255,0,0.02),rgba(0,0,255,0.06))] bg-[length:100%_4px,3px_100%] z-10 opacity-20" />
-          
-          <div className="border-b-2 border-retro-green p-3 bg-retro-green/20 flex items-center justify-between z-20">
-            <div className="flex items-center gap-2">
-              <Terminal className="w-5 h-5" />
-              <h2 className="uppercase tracking-widest text-lg">AI_LINK_ESTABLISHED</h2>
-            </div>
-            <button 
-              onClick={handleClearHistory}
-              className="px-2 py-0.5 border border-retro-green text-retro-green hover:bg-retro-green hover:text-retro-bg text-xs uppercase font-bold"
-            >
-              CLEAR_LOGS()
-            </button>
-          </div>
-          
-          <div className="flex-1 overflow-y-auto p-6 space-y-6 flex flex-col font-mono">
-            {chatMessages.map((msg, i) => (
-              <div key={i} className={`flex flex-col max-w-[85%] ${msg.role === 'user' ? 'self-end items-end' : 'self-start'}`}>
-                <span className="text-xs text-retro-green-dim mb-1 uppercase tracking-wider">
-                  {msg.role === 'user' ? 'USER_INPUT' : 'SYS_RESPONSE'}
-                </span>
-                <div className={`p-4 border-2 ${msg.role === 'user' ? 'border-retro-cyan bg-retro-cyan/10 text-white' : 'border-retro-green bg-retro-green/5 text-gray-100'}`}>
-                  <p className="whitespace-pre-wrap">{msg.content}</p>
-                  
-                  {msg.sources && msg.sources.length > 0 && (
-                    <div className="mt-3 pt-3 border-t border-retro-green/20 text-xs">
-                      <span className="text-retro-green-dim font-bold uppercase tracking-wider block mb-1">RETRIEVED_SOURCES:</span>
-                      <div className="flex flex-wrap gap-2">
-                        {msg.sources.map((src, idx) => (
-                          <button
-                            key={idx}
-                            onClick={() => {
-                              const file = files.find(f => f.filePath === src.filePath);
-                              if (file) {
-                                setIsExpandedView(true);
-                                handleViewFile(file, { startLine: src.startLine, endLine: src.endLine });
-                              } else {
-                                alert(`File ${src.filePath} not found in repository files.`);
-                              }
-                            }}
-                            title={src.filePath}
-                            className="px-2 py-1 border border-retro-green/45 hover:border-retro-cyan hover:text-retro-cyan bg-retro-green/10 text-retro-green transition-colors font-mono text-[11px]"
-                          >
-                            {src.filePath.split('/').pop()} (L{src.startLine}-{src.endLine})
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </div>
+        <div className={`flex flex-col overflow-hidden ${
+          isChatFullscreen 
+            ? 'fixed inset-0 z-50 p-4 md:p-6 bg-retro-bg/95 backdrop-blur-sm' 
+            : 'md:w-2/3 border-2 border-retro-green shadow-[4px_4px_0_0_#00ff41] relative h-full'
+        }`}>
+          <div className={`flex-1 flex flex-col min-h-0 bg-retro-bg relative ${
+            isChatFullscreen 
+              ? 'border-2 border-retro-green shadow-retro shadow-retro-green' 
+              : ''
+          }`}>
+            {/* CRT Scanline overlay just for this panel */}
+            <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(rgba(18,16,16,0)_50%,rgba(0,0,0,0.25)_50%),linear-gradient(90deg,rgba(255,0,0,0.06),rgba(0,255,0,0.02),rgba(0,0,255,0.06))] bg-[length:100%_4px,3px_100%] z-10 opacity-20" />
+            
+            <div className="border-b-2 border-retro-green p-3 bg-retro-green/20 flex items-center justify-between z-20">
+              <div className="flex items-center gap-2">
+                <Terminal className="w-5 h-5" />
+                <h2 className="uppercase tracking-widest text-lg">AI_LINK_ESTABLISHED</h2>
               </div>
-            ))}
-            <div ref={chatEndRef} />
-          </div>
+              <div className="flex items-center gap-3">
+                <button 
+                  onClick={handleClearHistory}
+                  className="px-2 py-0.5 border border-retro-green text-retro-green hover:bg-retro-green hover:text-retro-bg text-xs uppercase font-bold"
+                >
+                  CLEAR_LOGS()
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setIsChatFullscreen(!isChatFullscreen)}
+                  className="p-1 border border-retro-green text-retro-green hover:bg-retro-green hover:text-retro-bg transition-colors"
+                  title={isChatFullscreen ? "Exit Fullscreen" : "Fullscreen Chat"}
+                >
+                  {isChatFullscreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
+                </button>
+              </div>
+            </div>
+            
+            <div className="flex-1 overflow-y-auto p-6 space-y-6 flex flex-col font-mono">
+              {chatMessages.map((msg, i) => (
+                <div key={i} className={`flex flex-col max-w-[85%] ${msg.role === 'user' ? 'self-end items-end' : 'self-start'}`}>
+                  <span className="text-xs text-retro-green-dim mb-1 uppercase tracking-wider">
+                    {msg.role === 'user' ? 'USER_INPUT' : 'SYS_RESPONSE'}
+                  </span>
+                  <div className={`p-4 border-2 ${msg.role === 'user' ? 'border-retro-cyan bg-retro-cyan/10 text-white' : 'border-retro-green bg-retro-green/5 text-gray-100'}`}>
+                    <p className="whitespace-pre-wrap">{msg.content}</p>
+                    
+                    {msg.sources && msg.sources.length > 0 && (
+                      <div className="mt-3 pt-3 border-t border-retro-green/20 text-xs">
+                        <span className="text-retro-green-dim font-bold uppercase tracking-wider block mb-1">RETRIEVED_SOURCES:</span>
+                        <div className="flex flex-wrap gap-2">
+                          {msg.sources.map((src, idx) => (
+                            <button
+                              key={idx}
+                              onClick={() => {
+                                const file = files.find(f => f.filePath === src.filePath);
+                                if (file) {
+                                  setIsExpandedView(true);
+                                  handleViewFile(file, { startLine: src.startLine, endLine: src.endLine });
+                                } else {
+                                  alert(`File ${src.filePath} not found in repository files.`);
+                                }
+                              }}
+                              title={src.filePath}
+                              className="px-2 py-1 border border-retro-green/45 hover:border-retro-cyan hover:text-retro-cyan bg-retro-green/10 text-retro-green transition-colors font-mono text-[11px]"
+                            >
+                              {src.filePath.split('/').pop()} (L{src.startLine}-{src.endLine})
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))}
+              <div ref={chatEndRef} />
+            </div>
 
-          <div className="border-t-2 border-retro-green p-4 bg-retro-bg z-20">
-            <form onSubmit={handleSendMessage} className="flex gap-4 items-center">
-              <span className="text-xl text-retro-green font-bold animate-pulse">&gt;</span>
-              <input
-                type="text"
-                value={chatInput}
-                onChange={(e) => setChatInput(e.target.value)}
-                placeholder={isSending ? "AI is generating response..." : "Query the codebase..."}
-                disabled={isSending}
-                className="flex-1 bg-transparent border-b-2 border-retro-green/50 focus:border-retro-green text-retro-green placeholder:text-retro-green/30 px-2 py-2 outline-none font-mono"
-              />
-              <button 
-                type="submit" 
-                disabled={!chatInput.trim() || isSending}
-                className="p-3 border-2 border-retro-green text-retro-green hover:bg-retro-green hover:text-retro-bg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                <Send className="w-5 h-5" />
-              </button>
-            </form>
+            <div className="border-t-2 border-retro-green p-4 bg-retro-bg z-20">
+              <form onSubmit={handleSendMessage} className="flex gap-4 items-center">
+                <span className="text-xl text-retro-green font-bold animate-pulse">&gt;</span>
+                <input
+                  type="text"
+                  value={chatInput}
+                  onChange={(e) => setChatInput(e.target.value)}
+                  placeholder={isSending ? "AI is generating response..." : "Query the codebase..."}
+                  disabled={isSending}
+                  className="flex-1 bg-transparent border-b-2 border-retro-green/50 focus:border-retro-green text-retro-green placeholder:text-retro-green/30 px-2 py-2 outline-none font-mono"
+                />
+                <button 
+                  type="submit" 
+                  disabled={!chatInput.trim() || isSending}
+                  className="p-3 border-2 border-retro-green text-retro-green hover:bg-retro-green hover:text-retro-bg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <Send className="w-5 h-5" />
+                </button>
+              </form>
+            </div>
           </div>
         </div>
 
