@@ -2,9 +2,10 @@
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { getRepositoryDetails, getRepositoryFiles, getRepositoryFile } from '@/lib/api/repository';
+import { getRepositoryDetails, getRepositoryFiles, getRepositoryFile, getRepositorySummary } from '@/lib/api/repository';
 import { getChatHistory, clearChatHistory, queryRepositoryStream } from '@/lib/api/chat';
-import { Folder, FileCode, HardDrive, Cpu, Terminal, Send, ChevronRight, Maximize2, X } from 'lucide-react';
+import { Folder, FileCode, HardDrive, Cpu, Terminal, Send, ChevronRight, Maximize2, X, Info } from 'lucide-react';
+import Editor from '@monaco-editor/react';
 
 export default function RepositoryDashboard() {
   const params = useParams();
@@ -33,6 +34,107 @@ export default function RepositoryDashboard() {
   const [selectedFileContent, setSelectedFileContent] = useState<string>('');
   const [isFileLoading, setIsFileLoading] = useState(false);
 
+  // Monaco Highlights & Scrolling States
+  const [highlightRange, setHighlightRange] = useState<{ startLine: number; endLine: number } | null>(null);
+  const [editorInstance, setEditorInstance] = useState<any>(null);
+  const [monacoInstance, setMonacoInstance] = useState<any>(null);
+  const decorationsRef = useRef<string[]>([]);
+
+  // Insights Panel States
+  const [isInsightOpen, setIsInsightOpen] = useState(false);
+  const [summary, setSummary] = useState('');
+  const [isSummaryLoading, setIsSummaryLoading] = useState(false);
+  const [summaryError, setSummaryError] = useState('');
+
+  const mapLanguageToMonaco = (lang: string) => {
+    if (!lang) return 'plaintext';
+    const l = lang.toLowerCase();
+    if (['ts', 'tsx'].includes(l)) return 'typescript';
+    if (['js', 'jsx'].includes(l)) return 'javascript';
+    if (['py'].includes(l)) return 'python';
+    if (['rs'].includes(l)) return 'rust';
+    if (['sh', 'bash'].includes(l)) return 'shell';
+    if (['yml', 'yaml'].includes(l)) return 'yaml';
+    if (['md'].includes(l)) return 'markdown';
+    if (['c', 'h', 'cpp', 'hpp'].includes(l)) return 'cpp';
+    if (l === 'cs') return 'csharp';
+    return l;
+  };
+
+  const handleEditorDidMount = (editor: any, monaco: any) => {
+    setEditorInstance(editor);
+    setMonacoInstance(monaco);
+
+    monaco.editor.defineTheme('retro-hacker', {
+      base: 'vs-dark',
+      inherit: true,
+      rules: [
+        { token: '', foreground: '00ff41' },
+        { token: 'comment', foreground: '00aa30', fontStyle: 'italic' },
+        { token: 'keyword', foreground: '00ffff' },
+        { token: 'string', foreground: '00ff88' },
+        { token: 'number', foreground: '00ffc8' },
+        { token: 'regexp', foreground: '00ffc8' },
+        { token: 'type', foreground: '00ffff' },
+      ],
+      colors: {
+        'editor.background': '#020202',
+        'editor.foreground': '#00ff41',
+        'editor.lineHighlightBackground': '#00ff4110',
+        'editorLineNumber.foreground': '#00ff4145',
+        'editorLineNumber.activeForeground': '#00ff41',
+        'editor.selectionBackground': '#00ff4130',
+      }
+    });
+    monaco.editor.setTheme('retro-hacker');
+  };
+
+  useEffect(() => {
+    if (!editorInstance || !monacoInstance) return;
+
+    decorationsRef.current = editorInstance.deltaDecorations(decorationsRef.current, []);
+
+    if (highlightRange && selectedFileContent) {
+      const { startLine, endLine } = highlightRange;
+      
+      decorationsRef.current = editorInstance.deltaDecorations([], [
+        {
+          range: new monacoInstance.Range(startLine, 1, endLine, 1),
+          options: {
+            isWholeLine: true,
+            className: 'monaco-chunk-highlight',
+            marginClassName: 'monaco-chunk-glyph-margin',
+          }
+        }
+      ]);
+
+      setTimeout(() => {
+        editorInstance.revealRangeInCenter({
+          startLineNumber: startLine,
+          startColumn: 1,
+          endLineNumber: endLine,
+          endColumn: 1
+        }, 1);
+      }, 150);
+    }
+  }, [selectedFileContent, highlightRange, editorInstance, monacoInstance]);
+
+  const handleOpenInsights = async () => {
+    setIsInsightOpen(true);
+    if (summary) return;
+
+    setIsSummaryLoading(true);
+    setSummaryError('');
+    try {
+      const data = await getRepositorySummary(id);
+      setSummary(data.summary);
+    } catch (err: any) {
+      setSummaryError(err.message || 'Failed to load summary insights');
+    } finally {
+      setIsSummaryLoading(false);
+    }
+  };
+
   const toggleFolder = (path: string) => {
     setExpandedFolders(prev => ({
       ...prev,
@@ -40,9 +142,10 @@ export default function RepositoryDashboard() {
     }));
   };
 
-  const handleViewFile = async (file: any) => {
+  const handleViewFile = async (file: any, range: { startLine: number; endLine: number } | null = null) => {
     setIsFileLoading(true);
     setSelectedFile(file);
+    setHighlightRange(range);
     try {
       const fileDetails = await getRepositoryFile(id, file.id);
       setSelectedFileContent(fileDetails.content);
@@ -61,7 +164,7 @@ export default function RepositoryDashboard() {
       let current = root;
       let currentPath = '';
       
-      parts.forEach((part, index) => {
+      parts.forEach((part: string, index: number) => {
         currentPath = currentPath ? `${currentPath}/${part}` : part;
         const isLast = index === parts.length - 1;
         
@@ -313,6 +416,13 @@ export default function RepositoryDashboard() {
           <h1 className="text-3xl uppercase tracking-wider text-retro-cyan flex items-center gap-2">
             <HardDrive className="w-8 h-8" /> 
             {repo.name}
+            <button
+              onClick={handleOpenInsights}
+              className="p-1.5 text-retro-cyan hover:text-white hover:bg-retro-cyan/20 border border-retro-cyan/30 hover:border-retro-cyan rounded transition-colors ml-2 flex items-center justify-center"
+              title="Show System Insights"
+            >
+              <Info className="w-5 h-5" />
+            </button>
           </h1>
           <p className="text-retro-green-dim mt-2 flex items-center gap-2">
             <span>STATUS: [{repo.status.toUpperCase()}]</span>
@@ -409,7 +519,7 @@ export default function RepositoryDashboard() {
                               const file = files.find(f => f.filePath === src.filePath);
                               if (file) {
                                 setIsExpandedView(true);
-                                handleViewFile(file);
+                                handleViewFile(file, { startLine: src.startLine, endLine: src.endLine });
                               } else {
                                 alert(`File ${src.filePath} not found in repository files.`);
                               }
@@ -544,7 +654,29 @@ export default function RepositoryDashboard() {
                   </div>
                 ) : selectedFile ? (
                   <div className="h-full overflow-hidden">
-                    {renderCodeWithLineNumbers(selectedFileContent)}
+                    <Editor
+                      height="100%"
+                      language={mapLanguageToMonaco(selectedFile.language)}
+                      value={selectedFileContent}
+                      theme="retro-hacker"
+                      onMount={handleEditorDidMount}
+                      options={{
+                        readOnly: true,
+                        minimap: { enabled: false },
+                        automaticLayout: true,
+                        fontSize: 14,
+                        fontFamily: '"VT323", "Courier New", monospace',
+                        lineNumbersMinChars: 3,
+                        scrollBeyondLastLine: false,
+                        wordWrap: 'on',
+                        domReadOnly: true,
+                      }}
+                      loading={
+                        <div className="flex flex-col items-center justify-center h-full bg-[#020202]">
+                          <p className="text-retro-green animate-pulse">&gt; INITIALIZING_EDITOR...</p>
+                        </div>
+                      }
+                    />
                   </div>
                 ) : (
                   <div className="flex flex-col items-center justify-center h-full text-retro-green-dim space-y-4 p-8 text-center select-none">
@@ -555,6 +687,140 @@ export default function RepositoryDashboard() {
                     </div>
                   </div>
                 )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Insight Panel Modal */}
+      {isInsightOpen && (
+        <div className="fixed inset-0 z-50 bg-retro-bg/95 backdrop-blur-sm p-4 md:p-6 flex flex-col font-mono">
+          {/* Modal Header */}
+          <div className="border-2 border-retro-cyan bg-retro-bg/90 p-4 mb-4 flex justify-between items-center shadow-retro shadow-retro-cyan">
+            <div className="flex items-center gap-3">
+              <Info className="text-retro-cyan w-6 h-6 animate-pulse" />
+              <h2 className="text-xl md:text-2xl uppercase tracking-widest text-retro-cyan font-bold">
+                SYSTEM_INSIGHTS_V1.0 // {repo.name}
+              </h2>
+            </div>
+            <button 
+              onClick={() => setIsInsightOpen(false)}
+              className="p-2 border-2 border-retro-cyan text-retro-cyan hover:bg-retro-cyan hover:text-retro-bg transition-colors"
+              title="Exit insights"
+            >
+              <X className="w-6 h-6" />
+            </button>
+          </div>
+
+          {/* Modal Content */}
+          <div className="flex-1 flex flex-col md:flex-row gap-6 min-h-0 overflow-y-auto">
+            {/* Left Column: AI Summary */}
+            <div className="flex-1 md:flex-[0.65] border-2 border-retro-green flex flex-col bg-retro-bg overflow-hidden shadow-retro shadow-retro-green">
+              <div className="border-b-2 border-retro-green p-3 bg-retro-green/20">
+                <span className="uppercase tracking-widest text-base font-bold text-retro-green">AI_DECRYPTED_ARCHITECTURE</span>
+              </div>
+              
+              <div className="flex-1 overflow-y-auto p-6 space-y-4 text-gray-100 scrollbar-thin select-text">
+                {isSummaryLoading ? (
+                  <div className="flex flex-col items-center justify-center h-full space-y-4">
+                    <div className="w-12 h-12 border-4 border-retro-green border-t-transparent animate-spin" />
+                    <p className="text-retro-green animate-pulse">&gt; QUERYING GEMINI INTEL CORE...</p>
+                    <p className="text-xs text-retro-green-dim">&gt; ANALYZING REPO TREE, README, AND DEPENDENCIES...</p>
+                  </div>
+                ) : summaryError ? (
+                  <div className="text-red-500 border border-red-500 p-4 bg-red-500/10">
+                    <p className="font-bold">&gt; ERROR_LOADING_SUMMARY</p>
+                    <p className="text-sm mt-2">{summaryError}</p>
+                  </div>
+                ) : (
+                  <div className="prose prose-invert max-w-none text-retro-green font-mono">
+                    <div className="space-y-6">
+                      {summary.split('# ').map((section: string, idx: number) => {
+                        if (!section.trim()) return null;
+                        const lines = section.split('\n');
+                        const title = lines[0];
+                        const body = lines.slice(1).join('\n');
+                        return (
+                          <div key={idx} className="border border-retro-green/30 p-4 bg-retro-green/5">
+                            <h3 className="text-lg font-bold text-retro-cyan border-b border-retro-cyan/30 pb-1 mb-2 uppercase tracking-wide">
+                              &gt; {title}
+                            </h3>
+                            <div className="whitespace-pre-wrap text-sm leading-relaxed text-retro-green">
+                              {body}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Right Column: Codebase Stats */}
+            <div className="flex-1 md:flex-[0.35] border-2 border-retro-cyan flex flex-col bg-retro-bg overflow-hidden shadow-retro shadow-retro-cyan">
+              <div className="border-b-2 border-retro-cyan p-3 bg-retro-cyan/20">
+                <span className="uppercase tracking-widest text-base font-bold text-retro-cyan">METRIC_DIAGNOSTICS</span>
+              </div>
+
+              <div className="flex-1 overflow-y-auto p-6 space-y-6 scrollbar-thin text-retro-green">
+                <div className="space-y-2">
+                  <h3 className="font-bold border-b border-retro-green/30 pb-1 uppercase text-retro-cyan">1. General Stats</h3>
+                  <div className="grid grid-cols-2 gap-2 text-sm font-mono">
+                    <span className="text-retro-green-dim">TOTAL FILES:</span>
+                    <span className="text-right">{repo.fileCount}</span>
+                    <span className="text-retro-green-dim">TOTAL CHUNKS:</span>
+                    <span className="text-right">{repo.chunkCount}</span>
+                    <span className="text-retro-green-dim">PRIMARY LANG:</span>
+                    <span className="text-right">{repo.primaryLanguage?.toUpperCase() || 'UNKNOWN'}</span>
+                  </div>
+                </div>
+
+                <div className="space-y-3">
+                  <h3 className="font-bold border-b border-retro-green/30 pb-1 uppercase text-retro-cyan">2. Language Breakdown</h3>
+                  <div className="space-y-2 text-sm font-mono">
+                    {(() => {
+                      const langCounts: Record<string, number> = {};
+                      files.forEach(f => {
+                        const lang = f.language || 'unknown';
+                        langCounts[lang] = (langCounts[lang] || 0) + 1;
+                      });
+                      return Object.entries(langCounts)
+                        .sort((a, b) => b[1] - a[1])
+                        .map(([lang, count]) => {
+                          const pct = ((count / files.length) * 100).toFixed(0);
+                          return (
+                            <div key={lang} className="space-y-1">
+                              <div className="flex justify-between">
+                                <span className="uppercase">{lang}</span>
+                                <span>{count} files ({pct}%)</span>
+                              </div>
+                              <div className="w-full bg-retro-bg border border-retro-green/30 h-2">
+                                <div className="bg-retro-cyan h-full" style={{ width: `${pct}%` }} />
+                              </div>
+                            </div>
+                          );
+                        });
+                    })()}
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <h3 className="font-bold border-b border-retro-green/30 pb-1 uppercase text-retro-cyan">3. Largest Files</h3>
+                  <div className="space-y-1 text-xs font-mono">
+                    {files
+                      .filter(f => f.language !== 'binary')
+                      .sort((a, b) => (b.lineCount || 0) - (a.lineCount || 0))
+                      .slice(0, 5)
+                      .map((f, i) => (
+                        <div key={i} className="flex justify-between border-b border-retro-green/10 py-1">
+                          <span className="truncate pr-2 text-retro-green" title={f.filePath}>{f.filePath}</span>
+                          <span className="text-retro-cyan flex-shrink-0">{f.lineCount} lines</span>
+                        </div>
+                      ))}
+                  </div>
+                </div>
               </div>
             </div>
           </div>

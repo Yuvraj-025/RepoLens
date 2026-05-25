@@ -36,6 +36,7 @@ model Repository {
   fileCount       Int               @default(0)
   chunkCount      Int               @default(0)
   primaryLanguage String?           @db.VarChar(100)
+  summary         String?           @db.Text
   createdAt       DateTime          @default(now())
   files           RepositoryFile[]
   chunks          Chunk[]

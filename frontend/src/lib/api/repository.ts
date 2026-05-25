@@ -101,3 +101,19 @@ export async function deleteRepository(id: string) {
   }
   return res.json();
 }
+
+export async function getRepositorySummary(id: string) {
+  const token = localStorage.getItem('accessToken');
+  const res = await fetch(`${API_URL}/repository/${id}/summary`, {
+    headers: {
+      'Authorization': `Bearer ${token}`
+    }
+  });
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    if (res.status === 401) throw new Error('401: Unauthorized');
+    throw new Error(err.message || 'Failed to fetch repository summary');
+  }
+  return res.json();
+}

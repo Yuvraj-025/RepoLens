@@ -31,6 +31,6 @@ yarn-error.log*
 
 #.bat files
 *.bat
-
+*.cmd
 # ...Except README.md
 !README.md

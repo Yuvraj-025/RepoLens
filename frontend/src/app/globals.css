@@ -50,3 +50,13 @@ body::after {
   background: #00ff41;
   color: #050505;
 }
+
+/* Monaco Editor Chunk Highlight */
+.monaco-chunk-highlight {
+  background-color: rgba(0, 255, 65, 0.15) !important;
+  border-left: 4px solid #00ffff !important;
+}
+
+.monaco-chunk-glyph-margin {
+  background-color: rgba(0, 255, 255, 0.2) !important;
+}

@@ -52,4 +52,9 @@ export class RepositoryController {
   ) {
     return this.repositoryService.getRepositoryFile(id, fileId, req.user.id);
   }
+
+  @Get(':id/summary')
+  async getRepositorySummary(@Param('id') id: string, @Request() req: any) {
+    return this.repositoryService.getRepositorySummary(id, req.user.id);
+  }
 }
