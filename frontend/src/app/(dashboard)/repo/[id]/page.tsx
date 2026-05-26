@@ -6,6 +6,9 @@ import { getRepositoryDetails, getRepositoryFiles, getRepositoryFile, getReposit
 import { getChatHistory, clearChatHistory, queryRepositoryStream } from '@/lib/api/chat';
 import { Folder, FileCode, HardDrive, Cpu, Terminal, Send, ChevronRight, Maximize2, Minimize2, X, Info } from 'lucide-react';
 import Editor from '@monaco-editor/react';
+import StatsSummary from '@/components/insights/StatsSummary';
+import LanguageChart from '@/components/insights/LanguageChart';
+import LargestFilesTable from '@/components/insights/LargestFilesTable';
 
 export default function RepositoryDashboard() {
   const params = useParams();
@@ -786,62 +789,13 @@ export default function RepositoryDashboard() {
               </div>
 
               <div className="flex-1 overflow-y-auto p-6 space-y-6 scrollbar-thin text-retro-green">
-                <div className="space-y-2">
-                  <h3 className="font-bold border-b border-retro-green/30 pb-1 uppercase text-retro-cyan">1. General Stats</h3>
-                  <div className="grid grid-cols-2 gap-2 text-sm font-mono">
-                    <span className="text-retro-green-dim">TOTAL FILES:</span>
-                    <span className="text-right">{repo.fileCount}</span>
-                    <span className="text-retro-green-dim">TOTAL CHUNKS:</span>
-                    <span className="text-right">{repo.chunkCount}</span>
-                    <span className="text-retro-green-dim">PRIMARY LANG:</span>
-                    <span className="text-right">{repo.primaryLanguage?.toUpperCase() || 'UNKNOWN'}</span>
-                  </div>
-                </div>
-
-                <div className="space-y-3">
-                  <h3 className="font-bold border-b border-retro-green/30 pb-1 uppercase text-retro-cyan">2. Language Breakdown</h3>
-                  <div className="space-y-2 text-sm font-mono">
-                    {(() => {
-                      const langCounts: Record<string, number> = {};
-                      files.forEach(f => {
-                        const lang = f.language || 'unknown';
-                        langCounts[lang] = (langCounts[lang] || 0) + 1;
-                      });
-                      return Object.entries(langCounts)
-                        .sort((a, b) => b[1] - a[1])
-                        .map(([lang, count]) => {
-                          const pct = ((count / files.length) * 100).toFixed(0);
-                          return (
-                            <div key={lang} className="space-y-1">
-                              <div className="flex justify-between">
-                                <span className="uppercase">{lang}</span>
-                                <span>{count} files ({pct}%)</span>
-                              </div>
-                              <div className="w-full bg-retro-bg border border-retro-green/30 h-2">
-                                <div className="bg-retro-cyan h-full" style={{ width: `${pct}%` }} />
-                              </div>
-                            </div>
-                          );
-                        });
-                    })()}
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <h3 className="font-bold border-b border-retro-green/30 pb-1 uppercase text-retro-cyan">3. Largest Files</h3>
-                  <div className="space-y-1 text-xs font-mono">
-                    {files
-                      .filter(f => f.language !== 'binary')
-                      .sort((a, b) => (b.lineCount || 0) - (a.lineCount || 0))
-                      .slice(0, 5)
-                      .map((f, i) => (
-                        <div key={i} className="flex justify-between border-b border-retro-green/10 py-1">
-                          <span className="truncate pr-2 text-retro-green" title={f.filePath}>{f.filePath}</span>
-                          <span className="text-retro-cyan flex-shrink-0">{f.lineCount} lines</span>
-                        </div>
-                      ))}
-                  </div>
-                </div>
+                <StatsSummary 
+                  fileCount={repo.fileCount} 
+                  chunkCount={repo.chunkCount} 
+                  primaryLanguage={repo.primaryLanguage} 
+                />
+                <LanguageChart files={files} />
+                <LargestFilesTable files={files} />
               </div>
             </div>
           </div>

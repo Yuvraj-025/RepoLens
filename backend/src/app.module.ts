@@ -7,6 +7,7 @@ import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import { ParsingModule } from './modules/parsing/parsing.module';
 import { EmbeddingModule } from './modules/embedding/embedding.module';
 import { ChatModule } from './modules/chat/chat.module';
+import { InsightsModule } from './modules/insights/insights.module';
 
 @Module({
   imports: [
@@ -16,6 +17,7 @@ import { ChatModule } from './modules/chat/chat.module';
     ParsingModule,
     EmbeddingModule,
     ChatModule,
+    InsightsModule,
   ],
   providers: [
     {

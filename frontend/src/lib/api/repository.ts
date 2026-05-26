@@ -104,7 +104,7 @@ export async function deleteRepository(id: string) {
 
 export async function getRepositorySummary(id: string) {
   const token = localStorage.getItem('accessToken');
-  const res = await fetch(`${API_URL}/repository/${id}/summary`, {
+  const res = await fetch(`${API_URL}/insights/${id}`, {
     headers: {
       'Authorization': `Bearer ${token}`
     }
