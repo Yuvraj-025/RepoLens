@@ -1,12 +1,14 @@
 import { Controller, Post, Get, Delete, Body, Param, Request, Res } from '@nestjs/common';
 import { Response } from 'express';
 import { ChatService } from './chat.service';
+import { Throttle } from '@nestjs/throttler';
 
 @Controller('chat')
 export class ChatController {
   constructor(private readonly chatService: ChatService) {}
 
   @Post('query')
+  @Throttle({ global: { limit: 10, ttl: 60000 } })
   async queryRepository(
     @Body() body: { repositoryId: string; query: string },
     @Request() req: any,

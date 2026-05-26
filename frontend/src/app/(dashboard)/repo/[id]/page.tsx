@@ -320,6 +320,38 @@ export default function RepositoryDashboard() {
     }
   };
 
+  const handleSaveChat = () => {
+    if (chatMessages.length === 0) return;
+
+    let text = `=========================================\n`;
+    text += `REPOLENS CHAT HISTORY LOG\n`;
+    text += `REPOSITORY: ${repo?.name || 'UNKNOWN'}\n`;
+    text += `EXPORT DATE: ${new Date().toLocaleString()}\n`;
+    text += `=========================================\n\n`;
+
+    chatMessages.forEach((msg) => {
+      const roleName = msg.role === 'user' ? 'USER_INPUT' : 'SYS_RESPONSE';
+      text += `[${roleName}]:\n${msg.content}\n`;
+      if (msg.sources && msg.sources.length > 0) {
+        text += `\nCitations:\n`;
+        msg.sources.forEach((src) => {
+          text += `  - ${src.filePath} (Lines ${src.startLine}-${src.endLine})\n`;
+        });
+      }
+      text += `\n-----------------------------------------\n\n`;
+    });
+
+    const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `repolens-chat-${repo?.name || 'history'}-${new Date().toISOString().slice(0, 10)}.txt`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!chatInput.trim() || isSending) return;
@@ -505,6 +537,13 @@ export default function RepositoryDashboard() {
                 <h2 className="uppercase tracking-widest text-lg">AI_LINK_ESTABLISHED</h2>
               </div>
               <div className="flex items-center gap-3">
+                <button 
+                  onClick={handleSaveChat}
+                  disabled={chatMessages.length === 0 || (chatMessages.length === 1 && chatMessages[0].content.includes('INITIALIZING AI LINK'))}
+                  className="px-2 py-0.5 border border-retro-cyan text-retro-cyan hover:bg-retro-cyan hover:text-retro-bg disabled:opacity-40 disabled:cursor-not-allowed text-xs uppercase font-bold"
+                >
+                  SAVE_CHAT()
+                </button>
                 <button 
                   onClick={handleClearHistory}
                   className="px-2 py-0.5 border border-retro-green text-retro-green hover:bg-retro-green hover:text-retro-bg text-xs uppercase font-bold"

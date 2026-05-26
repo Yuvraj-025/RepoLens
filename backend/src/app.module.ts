@@ -8,9 +8,17 @@ import { ParsingModule } from './modules/parsing/parsing.module';
 import { EmbeddingModule } from './modules/embedding/embedding.module';
 import { ChatModule } from './modules/chat/chat.module';
 import { InsightsModule } from './modules/insights/insights.module';
+import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 
 @Module({
   imports: [
+    ThrottlerModule.forRoot([
+      {
+        name: 'global',
+        ttl: 60000, // 1 minute in milliseconds
+        limit: 100, // 100 requests globally per minute per IP
+      },
+    ]),
     PrismaModule,
     AuthModule,
     RepositoryModule,
@@ -20,6 +28,10 @@ import { InsightsModule } from './modules/insights/insights.module';
     InsightsModule,
   ],
   providers: [
+    {
+      provide: APP_GUARD,
+      useClass: ThrottlerGuard,
+    },
     {
       provide: APP_GUARD,
       useClass: JwtAuthGuard,

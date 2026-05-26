@@ -2,12 +2,14 @@ import { Controller, Post, Get, Param, Delete, UploadedFile, UseInterceptors, Pa
 import { FileInterceptor } from '@nestjs/platform-express';
 import { RepositoryService } from './repository.service';
 import { Request } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 
 @Controller('repository')
 export class RepositoryController {
   constructor(private readonly repositoryService: RepositoryService) {}
 
   @Post('upload')
+  @Throttle({ global: { limit: 3, ttl: 60000 } })
   @UseInterceptors(FileInterceptor('file'))
   async uploadRepository(
     @UploadedFile(

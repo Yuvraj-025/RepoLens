@@ -20,6 +20,7 @@ export default function DashboardPage() {
 
   const [repoToDelete, setRepoToDelete] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
 
   // Insights Panel States
   const [selectedRepoForInsights, setSelectedRepoForInsights] = useState<any>(null);
@@ -119,6 +120,12 @@ export default function DashboardPage() {
     }
   };
 
+  const filteredRepos = React.useMemo(() => {
+    return repos.filter((repo) =>
+      repo.name.toLowerCase().includes(searchQuery.toLowerCase())
+    );
+  }, [repos, searchQuery]);
+
   return (
     <div className="flex flex-col h-full max-w-5xl mx-auto space-y-8">
       <div className="flex justify-between items-end border-b-2 border-retro-green-dim pb-4">
@@ -138,55 +145,81 @@ export default function DashboardPage() {
         </button>
       </div>
 
+      {/* Search Input */}
+      <div className="border-2 border-retro-green p-4 bg-retro-bg flex items-center gap-3 shadow-retro shadow-retro-green/20">
+        <span className="text-retro-green font-bold text-xl uppercase font-mono">&gt; SEARCH_REPO:</span>
+        <input
+          type="text"
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          placeholder="ENTER REPOSITORY NAME..."
+          className="bg-transparent border-b border-retro-green/30 focus:border-retro-green text-retro-green text-xl outline-none font-mono flex-1 uppercase placeholder-retro-green-dim/30"
+        />
+        {searchQuery && (
+          <button
+            onClick={() => setSearchQuery('')}
+            className="text-retro-green-dim hover:text-retro-green text-lg font-bold border border-retro-green-dim px-2 py-0.5"
+          >
+            [CLEAR]
+          </button>
+        )}
+      </div>
+
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {repos.map((repo) => (
-          <Link key={repo.id} href={`/repo/${repo.id}`} className="block">
-            <div className="border-2 border-retro-green p-6 hover:bg-retro-green/10 transition-colors h-full flex flex-col group relative">
-              <div className="absolute top-2 right-2 flex items-center gap-3">
-                {repo.status === 'ready' && (
+        {filteredRepos.length === 0 ? (
+          <div className="col-span-full border-2 border-dashed border-retro-green/40 p-8 text-center bg-retro-green/5">
+            <p className="text-xl text-retro-green-dim uppercase font-mono">&gt; NO MATCHING REPOSITORIES FOUND</p>
+          </div>
+        ) : (
+          filteredRepos.map((repo) => (
+            <Link key={repo.id} href={`/repo/${repo.id}`} className="block">
+              <div className="border-2 border-retro-green p-6 hover:bg-retro-green/10 transition-colors h-full flex flex-col group relative">
+                <div className="absolute top-2 right-2 flex items-center gap-3">
+                  {repo.status === 'ready' && (
+                    <button 
+                      onClick={(e) => handleOpenInsights(e, repo)}
+                      className="text-retro-cyan hover:text-white transition-all opacity-50 group-hover:opacity-100 hover:scale-110 z-10 p-1"
+                      title="Show System Insights"
+                    >
+                      <Info className="w-6 h-6" />
+                    </button>
+                  )}
                   <button 
-                    onClick={(e) => handleOpenInsights(e, repo)}
-                    className="text-retro-cyan hover:text-white transition-all opacity-50 group-hover:opacity-100 hover:scale-110 z-10 p-1"
-                    title="Show System Insights"
+                    onClick={(e) => handleDeleteClick(e, repo.id)} 
+                    className="text-red-500 hover:text-red-400 transition-all opacity-50 group-hover:opacity-100 hover:scale-110 z-10 p-1"
+                    title="Purge Repository"
                   >
-                    <Info className="w-6 h-6" />
+                    <Trash2 className="w-6 h-6" />
                   </button>
-                )}
-                <button 
-                  onClick={(e) => handleDeleteClick(e, repo.id)} 
-                  className="text-red-500 hover:text-red-400 transition-all opacity-50 group-hover:opacity-100 hover:scale-110 z-10 p-1"
-                  title="Purge Repository"
-                >
-                  <Trash2 className="w-6 h-6" />
-                </button>
-                <div className="opacity-50 group-hover:opacity-100 transition-opacity">
-                  {repo.status === 'ready' ? <CheckCircle className="text-retro-green w-6 h-6" /> : <Clock className="text-yellow-500 animate-pulse w-6 h-6" />}
+                  <div className="opacity-50 group-hover:opacity-100 transition-opacity">
+                    {repo.status === 'ready' ? <CheckCircle className="text-retro-green w-6 h-6" /> : <Clock className="text-yellow-500 animate-pulse w-6 h-6" />}
+                  </div>
+                </div>
+                
+                <h3 className="text-2xl font-bold uppercase mb-4 text-retro-green">{repo.name}</h3>
+                
+                <div className="space-y-2 text-lg mb-6 flex-1">
+                  <div className="flex justify-between">
+                    <span className="text-retro-green-dim">PRIMARY_LANG:</span>
+                    <span>{repo.primaryLanguage || 'Unknown'}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-retro-green-dim">FILE_COUNT:</span>
+                    <span>{repo.fileCount || 0}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-retro-green-dim">EMBEDDING_CHUNKS:</span>
+                    <span>{repo.chunkCount || 0}</span>
+                  </div>
+                </div>
+                
+                <div className="text-sm text-retro-green-dim mt-auto border-t border-retro-green/30 pt-2">
+                  UPLOADED: {new Date(repo.createdAt).toLocaleDateString()}
                 </div>
               </div>
-              
-              <h3 className="text-2xl font-bold uppercase mb-4 text-retro-green">{repo.name}</h3>
-              
-              <div className="space-y-2 text-lg mb-6 flex-1">
-                <div className="flex justify-between">
-                  <span className="text-retro-green-dim">PRIMARY_LANG:</span>
-                  <span>{repo.primaryLanguage || 'Unknown'}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-retro-green-dim">FILE_COUNT:</span>
-                  <span>{repo.fileCount || 0}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-retro-green-dim">EMBEDDING_CHUNKS:</span>
-                  <span>{repo.chunkCount || 0}</span>
-                </div>
-              </div>
-              
-              <div className="text-sm text-retro-green-dim mt-auto border-t border-retro-green/30 pt-2">
-                UPLOADED: {new Date(repo.createdAt).toLocaleDateString()}
-              </div>
-            </div>
-          </Link>
-        ))}
+            </Link>
+          ))
+        )}
       </div>
 
       {isUploading && (
