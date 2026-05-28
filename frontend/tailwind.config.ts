@@ -9,32 +9,36 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        'retro-bg': '#050505',
-        'retro-green': '#00ff41',
-        'retro-green-dim': '#008f11',
-        'retro-cyan': '#00ffff',
+        // Luxury Old-School Minimalist Palette
+        'lux-bg': '#0e0d0c',
+        'lux-card': '#151311',
+        'lux-creme': '#f5f0e1',
+        'lux-creme-dim': '#9c907e',
+        'lux-gold': '#d1b894',
+        'lux-copper': '#b87b5c',
+        'lux-border': '#27221e',
+        'lux-border-bright': '#4a4038',
+
+        // Fallback overrides to keep existing styles working during migration
+        'retro-bg': '#0e0d0c',
+        'retro-green': '#f5f0e1',
+        'retro-green-dim': '#9c907e',
+        'retro-cyan': '#d1b894',
       },
       fontFamily: {
-        mono: ['"VT323"', '"Courier New"', 'monospace'],
+        sans: ['var(--font-marcellus)', 'system-ui', 'sans-serif'],
+        serif: ['var(--font-cormorant)', 'serif'],
+        mono: ['var(--font-courier)', 'monospace'],
+      },
+      backgroundImage: {
+        'gradient-radial': 'radial-gradient(var(--tw-gradient-stops))',
       },
       boxShadow: {
-        'retro': '4px 4px 0 0 var(--tw-shadow-color)',
-        'retro-hover': '2px 2px 0 0 var(--tw-shadow-color)',
+        'lux': '0 4px 20px rgba(0, 0, 0, 0.5)',
+        'lux-hover': '0 8px 30px rgba(0, 0, 0, 0.7)',
+        'retro': 'none', // Remove chunky retro shadows
+        'retro-hover': 'none',
       },
-      animation: {
-        'blink': 'blink 1s step-end infinite',
-        'scan': 'scan 2s linear infinite',
-      },
-      keyframes: {
-        blink: {
-          '0%, 100%': { opacity: '1' },
-          '50%': { opacity: '0' },
-        },
-        scan: {
-          '0%': { transform: 'translateY(-100%)' },
-          '100%': { transform: 'translateY(1000%)' },
-        }
-      }
     },
   },
   plugins: [],

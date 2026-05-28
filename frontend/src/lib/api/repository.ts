@@ -1,6 +1,26 @@
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 
+export async function importRepositoryFromGithub(githubUrl: string) {
+  const token = localStorage.getItem('accessToken');
+  const res = await fetch(`${API_URL}/repository/import-github`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`
+    },
+    body: JSON.stringify({ githubUrl }),
+  });
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    if (res.status === 401) throw new Error('401: Unauthorized');
+    throw new Error(err.message || 'Failed to import repository from GitHub');
+  }
+  return res.json();
+}
+
 export async function uploadRepository(file: File) {
+
   const token = localStorage.getItem('accessToken');
   const formData = new FormData();
   formData.append('file', file);

@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { signup } from '@/lib/api/auth';
 import Captcha from '@/components/auth/Captcha';
+import { copyContent } from '@/lib/content';
 
 export default function SignupPage() {
   const router = useRouter();
@@ -13,12 +14,20 @@ export default function SignupPage() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [isCaptchaValid, setIsCaptchaValid] = useState(false);
+  const [captchaToken, setCaptchaToken] = useState('');
+  const [captchaCode, setCaptchaCode] = useState('');
+
+  const c = copyContent.signup;
+
+  const handleCaptchaChange = (token: string, code: string) => {
+    setCaptchaToken(token);
+    setCaptchaCode(code);
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!isCaptchaValid) {
-      setError('CAPTCHA validation failed. Please verify you are human.');
+    if (!captchaCode) {
+      setError('Please solve the CAPTCHA first.');
       return;
     }
 
@@ -26,7 +35,7 @@ export default function SignupPage() {
     setIsLoading(true);
     
     try {
-      const data = await signup({ name, email, password });
+      const data = await signup({ name, email, password, captchaToken, captchaCode });
       localStorage.setItem('accessToken', data.accessToken);
       router.push('/dashboard');
     } catch (err: any) {
@@ -35,62 +44,103 @@ export default function SignupPage() {
       setIsLoading(false);
     }
   };
+
   return (
-    <div className="flex flex-col items-center justify-center flex-1">
-      <div className="w-full max-w-2xl border-2 border-retro-cyan p-10 shadow-retro shadow-retro-cyan bg-retro-bg relative">
-        <div className="absolute top-0 right-0 p-3 text-2xl text-retro-cyan opacity-50">SYS_INIT_NODE</div>
-        <h2 className="text-5xl text-retro-cyan mb-4 uppercase tracking-wider">&gt; REGISTER</h2>
-        <p className="text-2xl text-retro-green-dim mb-10 flex flex-wrap gap-x-4">
-          <span>INITIALIZE NEW INSTANCE...</span>
-          <span className="text-retro-cyan/30">|</span>
-          <Link href="/login" className="text-retro-green hover:underline hover:text-white">RETURN_TO_LOGIN</Link>
-          <span className="text-retro-cyan/30">|</span>
-          <Link href="/" className="text-retro-cyan hover:underline hover:text-white">EXIT_TO_LANDING</Link>
-        </p>
+    <div className="flex flex-col items-center justify-center flex-1 py-12 px-4 md:px-8 animate-reveal-up">
+      <div className="w-full max-w-xl border border-lux-border p-8 md:p-12 bg-lux-card/50 backdrop-blur-lg shadow-lux relative">
+        <div className="absolute top-0 right-0 p-4 font-mono text-[9px] tracking-widest text-lux-gold/60 uppercase">
+          {c.nodeLabel}
+        </div>
+        
+        <header className="mb-10 space-y-3">
+          <h2 className="text-3xl font-serif font-light tracking-widest text-lux-creme uppercase">
+            {c.title}
+          </h2>
+          <div className="h-[1px] w-12 bg-lux-gold/40"></div>
+          <p className="text-xs font-mono text-lux-creme-dim flex flex-wrap gap-x-3 items-center">
+            <span>{c.caption}</span>
+            <span className="opacity-30">/</span>
+            <Link href="/login" className="text-lux-gold hover:text-lux-creme transition-colors duration-300">
+              {c.loginLink}
+            </Link>
+            <span className="opacity-30">/</span>
+            <Link href="/" className="text-lux-creme-dim hover:text-lux-creme transition-colors duration-300">
+              {c.exitLink}
+            </Link>
+          </p>
+        </header>
 
         {error && (
-          <div className="bg-red-500/20 border-2 border-red-500 text-red-500 p-4 mb-6">
+          <div className="bg-lux-copper/10 border border-lux-copper/45 text-lux-copper p-4 text-xs font-mono mb-8">
             &gt; ERROR: {error}
           </div>
         )}
 
-        <form className="space-y-8" onSubmit={handleSubmit}>
-          <div className="space-y-8">
-            <div>
-              <label htmlFor="name" className="block text-2xl text-retro-cyan mb-3">&gt; DEFINE_ALIAS:</label>
-              <input 
-                id="name" name="name" type="text" required 
-                value={name} onChange={(e) => setName(e.target.value)}
-                className="w-full bg-transparent border-2 border-retro-cyan/50 p-4 text-3xl text-retro-cyan focus:border-retro-cyan focus:outline-none focus:shadow-[0_0_15px_#00ffff] transition-all" 
-                placeholder="NEO" 
-              />
-            </div>
-            <div>
-              <label htmlFor="email" className="block text-2xl text-retro-cyan mb-3">&gt; ASSIGN_COMMS_LINK:</label>
-              <input 
-                id="email" name="email" type="email" required 
-                value={email} onChange={(e) => setEmail(e.target.value)}
-                className="w-full bg-transparent border-2 border-retro-cyan/50 p-4 text-3xl text-retro-cyan focus:border-retro-cyan focus:outline-none focus:shadow-[0_0_15px_#00ffff] transition-all" 
-                placeholder="user@matrix.net" 
-              />
-            </div>
-            <div>
-              <label htmlFor="password" className="block text-2xl text-retro-cyan mb-3">&gt; GENERATE_KEY:</label>
-              <input 
-                id="password" name="password" type="password" required 
-                value={password} onChange={(e) => setPassword(e.target.value)}
-                className="w-full bg-transparent border-2 border-retro-cyan/50 p-4 text-3xl text-retro-cyan focus:border-retro-cyan focus:outline-none focus:shadow-[0_0_15px_#00ffff] transition-all" 
-                placeholder="********" 
-              />
-            </div>
-            
-            <Captcha onValidate={setIsCaptchaValid} colorTheme="cyan" />
+        <form className="space-y-6" onSubmit={handleSubmit}>
+          
+          {/* Alias Field */}
+          <div className="space-y-2">
+            <label htmlFor="name" className="block text-[10px] font-mono tracking-widest text-lux-creme-dim uppercase">
+              {c.labelAlias}
+            </label>
+            <input 
+              id="name" 
+              name="name" 
+              type="text" 
+              required 
+              value={name} 
+              onChange={(e) => setName(e.target.value)}
+              className="w-full bg-lux-bg/40 border border-lux-border p-3.5 font-mono text-sm text-lux-creme focus:border-lux-gold/50 focus:outline-none transition-all duration-300" 
+              placeholder={c.placeholderAlias} 
+            />
+          </div>
+
+          {/* Email Field */}
+          <div className="space-y-2">
+            <label htmlFor="email" className="block text-[10px] font-mono tracking-widest text-lux-creme-dim uppercase">
+              {c.labelEmail}
+            </label>
+            <input 
+              id="email" 
+              name="email" 
+              type="email" 
+              required 
+              value={email} 
+              onChange={(e) => setEmail(e.target.value)}
+              className="w-full bg-lux-bg/40 border border-lux-border p-3.5 font-mono text-sm text-lux-creme focus:border-lux-gold/50 focus:outline-none transition-all duration-300" 
+              placeholder={c.placeholderEmail} 
+            />
+          </div>
+
+          {/* Password Field */}
+          <div className="space-y-2">
+            <label htmlFor="password" className="block text-[10px] font-mono tracking-widest text-lux-creme-dim uppercase">
+              {c.labelPassword}
+            </label>
+            <input 
+              id="password" 
+              name="password" 
+              type="password" 
+              required 
+              value={password} 
+              onChange={(e) => setPassword(e.target.value)}
+              className="w-full bg-lux-bg/40 border border-lux-border p-3.5 font-mono text-sm text-lux-creme focus:border-lux-gold/50 focus:outline-none transition-all duration-300" 
+              placeholder="••••••••" 
+            />
+          </div>
+
+          {/* Captcha */}
+          <div className="pt-2">
+            <Captcha onCaptchaChange={handleCaptchaChange} colorTheme="cyan" />
           </div>
           
-          <div className="pt-8">
-            <button type="submit" disabled={isLoading} className="w-full border-2 border-retro-cyan text-retro-cyan p-6 text-4xl font-bold uppercase hover:bg-retro-cyan hover:text-retro-bg shadow-retro shadow-retro-cyan hover:shadow-retro-hover hover:translate-x-[2px] hover:translate-y-[2px] transition-all flex items-center justify-center gap-3 group disabled:opacity-50">
-              <span>{isLoading ? 'INITIALIZING...' : 'CREATE_ENTITY'}</span>
-              <span className="group-hover:animate-blink">_</span>
+          <div className="pt-6">
+            <button 
+              type="submit" 
+              disabled={isLoading} 
+              className="w-full border border-lux-gold/30 bg-lux-card hover:bg-lux-gold hover:text-lux-bg p-4 font-mono text-xs tracking-[0.2em] font-bold uppercase transition-all duration-500 disabled:opacity-50"
+            >
+              {isLoading ? c.buttonLoading : c.buttonInitialize}
             </button>
           </div>
         </form>

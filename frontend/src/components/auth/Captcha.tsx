@@ -1,103 +1,80 @@
-import React, { useEffect, useRef, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
+import { getCaptcha } from '@/lib/api/auth';
+import { copyContent } from '@/lib/content';
 
 interface CaptchaProps {
-  onValidate: (isValid: boolean) => void;
+  onCaptchaChange: (token: string, code: string) => void;
   colorTheme?: 'green' | 'cyan';
 }
 
-export default function Captcha({ onValidate, colorTheme = 'green' }: CaptchaProps) {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const [captchaText, setCaptchaText] = useState('');
+export default function Captcha({ onCaptchaChange, colorTheme = 'green' }: CaptchaProps) {
+  const [captchaToken, setCaptchaToken] = useState('');
+  const [captchaSvg, setCaptchaSvg] = useState('');
   const [userInput, setUserInput] = useState('');
+  const [isLoading, setIsLoading] = useState(true);
 
-  const generateCaptcha = useCallback(() => {
-    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';
-    let text = '';
-    for (let i = 0; i < 6; i++) {
-      text += chars.charAt(Math.floor(Math.random() * chars.length));
+  const c = copyContent.login; // Uses auth-shared copy variables
+
+  const fetchNewCaptcha = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      const data = await getCaptcha(colorTheme);
+      setCaptchaToken(data.token);
+      setCaptchaSvg(data.svg);
+      setUserInput('');
+      onCaptchaChange(data.token, '');
+    } catch (err) {
+      console.error('Failed to load CAPTCHA:', err);
+    } finally {
+      setIsLoading(false);
     }
-    setCaptchaText(text);
-    setUserInput('');
-    onValidate(false);
-
-    if (canvasRef.current) {
-      const ctx = canvasRef.current.getContext('2d');
-      if (ctx) {
-        ctx.clearRect(0, 0, 200, 60);
-        
-        // Background noise
-        ctx.fillStyle = colorTheme === 'green' ? 'rgba(0, 255, 65, 0.05)' : 'rgba(0, 255, 255, 0.05)';
-        ctx.fillRect(0, 0, 200, 60);
-
-        // Draw text
-        ctx.font = '36px "VT323", monospace';
-        ctx.fillStyle = colorTheme === 'green' ? '#00ff41' : '#00ffff';
-        ctx.textBaseline = 'middle';
-        
-        // Draw characters with slight rotation to prevent easy OCR
-        for(let i=0; i<text.length; i++) {
-            ctx.save();
-            ctx.translate(20 + i * 28, 30);
-            const rot = (Math.random() - 0.5) * 0.4;
-            ctx.rotate(rot);
-            ctx.fillText(text[i], 0, 0);
-            ctx.restore();
-        }
-
-        // Add some noise lines
-        for (let i = 0; i < 8; i++) {
-          ctx.strokeStyle = colorTheme === 'green' ? 'rgba(0, 255, 65, 0.4)' : 'rgba(0, 255, 255, 0.4)';
-          ctx.lineWidth = 2;
-          ctx.beginPath();
-          ctx.moveTo(Math.random() * 200, Math.random() * 60);
-          ctx.lineTo(Math.random() * 200, Math.random() * 60);
-          ctx.stroke();
-        }
-      }
-    }
-  }, [colorTheme, onValidate]);
+  }, [colorTheme, onCaptchaChange]);
 
   useEffect(() => {
-    generateCaptcha();
-  }, [generateCaptcha]);
+    fetchNewCaptcha();
+  }, [fetchNewCaptcha]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = e.target.value;
     setUserInput(val);
-    onValidate(val === captchaText);
+    onCaptchaChange(captchaToken, val);
   };
 
   return (
-    <div className="flex flex-col gap-3">
-      <label className={`block text-2xl ${colorTheme === 'cyan' ? 'text-retro-cyan' : ''}`}>&gt; VERIFY_HUMAN:</label>
-      <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
-        <canvas 
-          ref={canvasRef} 
-          width={200} 
-          height={60} 
-          className={`border-2 ${colorTheme === 'cyan' ? 'border-retro-cyan/50' : 'border-retro-green-dim'} cursor-pointer select-none`}
-          onClick={generateCaptcha}
-          title="Click to refresh CAPTCHA"
-        />
+    <div className="flex flex-col gap-4 font-mono text-xs">
+      <label className="block text-[10px] tracking-widest text-lux-creme-dim uppercase">
+        {c.labelCaptcha}
+      </label>
+      
+      <div className="flex flex-row items-center gap-4">
+        {isLoading ? (
+          <div className="w-[200px] h-[60px] border border-lux-border flex items-center justify-center text-lux-creme-dim bg-lux-bg/40 animate-pulse text-[10px] uppercase tracking-wider">
+            Loading...
+          </div>
+        ) : (
+          <div 
+            onClick={fetchNewCaptcha}
+            title="Click to refresh CAPTCHA"
+            className="cursor-pointer select-none captcha-svg-container transition-opacity duration-300 hover:opacity-85"
+            dangerouslySetInnerHTML={{ __html: captchaSvg }}
+          />
+        )}
         <button 
           type="button" 
-          onClick={generateCaptcha} 
-          className={`text-lg ${colorTheme === 'cyan' ? 'text-retro-cyan hover:text-white' : 'text-retro-green hover:text-white'} hover:underline`}
+          onClick={fetchNewCaptcha} 
+          className="text-[10px] text-lux-gold hover:text-lux-creme uppercase tracking-wider transition-colors duration-300 font-bold"
         >
-          [REFRESH_CODE]
+          [ Refresh ]
         </button>
       </div>
+
       <input
         type="text"
         value={userInput}
         onChange={handleInputChange}
         required
-        placeholder="ENTER_CODE"
-        className={`w-full bg-transparent border-2 p-4 text-3xl transition-all focus:outline-none ${
-          colorTheme === 'cyan' 
-            ? 'border-retro-cyan/50 text-retro-cyan focus:border-retro-cyan focus:shadow-[0_0_15px_#00ffff]' 
-            : 'border-retro-green-dim text-retro-green focus:border-retro-green focus:shadow-[0_0_15px_#00ff41]'
-        }`}
+        placeholder="Enter verification code"
+        className="w-full bg-lux-bg/40 border border-lux-border p-3.5 font-mono text-sm text-lux-creme focus:border-lux-gold/50 focus:outline-none transition-all duration-300"
       />
     </div>
   );

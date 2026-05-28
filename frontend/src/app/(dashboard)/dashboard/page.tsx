@@ -1,13 +1,26 @@
 'use client';
 
-import React, { useState, useEffect, useRef } from 'react';
-import { Upload, FileCode, CheckCircle, Clock, AlertTriangle, Trash2, Info, X } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Upload, FileCode, CheckCircle, Clock, AlertTriangle, Trash2, Info, X, Github } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { uploadRepository, getRepositories, deleteRepository, getRepositorySummary, getRepositoryFiles } from '@/lib/api/repository';
+import { uploadRepository, getRepositories, deleteRepository, getRepositorySummary, getRepositoryFiles, importRepositoryFromGithub } from '@/lib/api/repository';
 import StatsSummary from '@/components/insights/StatsSummary';
 import LanguageChart from '@/components/insights/LanguageChart';
 import LargestFilesTable from '@/components/insights/LargestFilesTable';
+import { copyContent } from '@/lib/content';
+
+const formatMarkdown = (text: string) => {
+  if (!text) return '';
+  let escaped = text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+  escaped = escaped.replace(/\*\*([^\s\*](?:[\s\S]*?[^\s\*])?)\*\*/g, '<strong>$1</strong>');
+  escaped = escaped.replace(/\*([^\s\*](?:[\s\S]*?[^\s\*])?)\*/g, '<em>$1</em>');
+  escaped = escaped.replace(/`([^`\s](?:[^`]*?[^`\s])?)`/g, '<code class="px-1.5 py-0.5 font-mono text-[11px] bg-[#0e0d0c]/60 border border-lux-border/60 text-lux-gold rounded">$1</code>');
+  return escaped;
+};
 
 export default function DashboardPage() {
   const router = useRouter();
@@ -16,7 +29,9 @@ export default function DashboardPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [uploadError, setUploadError] = useState('');
   const [isUploadingFile, setIsUploadingFile] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [githubUrl, setGithubUrl] = useState('');
+  const [isImportingGithub, setIsImportingGithub] = useState(false);
+  const fileInputRef = React.useRef<HTMLInputElement>(null);
 
   const [repoToDelete, setRepoToDelete] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -29,6 +44,8 @@ export default function DashboardPage() {
   const [insightsFiles, setInsightsFiles] = useState<any[]>([]);
   const [isSummaryLoading, setIsSummaryLoading] = useState(false);
   const [summaryError, setSummaryError] = useState('');
+
+  const c = copyContent.dashboard;
 
   const fetchRepos = async () => {
     try {
@@ -48,8 +65,32 @@ export default function DashboardPage() {
     fetchRepos();
   }, []);
 
+  const handleGithubImport = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!githubUrl.trim() || isImportingGithub) return;
+
+    setUploadError('');
+    setIsImportingGithub(true);
+    try {
+      await importRepositoryFromGithub(githubUrl.trim());
+      setGithubUrl('');
+      setIsUploading(false); // Close modal
+      fetchRepos(); // Refresh list
+    } catch (err: any) {
+      fetchRepos(); // Refresh list so the errored repository shows up
+      if (err.message && err.message.includes('401:')) {
+        router.push('/login');
+      } else {
+        setUploadError(err.message || 'GitHub import failed');
+      }
+    } finally {
+      setIsImportingGithub(false);
+    }
+  };
+
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files || e.target.files.length === 0) return;
+
     const file = e.target.files[0];
     
     if (file.type !== 'application/zip' && file.type !== 'application/x-zip-compressed' && !file.name.endsWith('.zip')) {
@@ -64,6 +105,7 @@ export default function DashboardPage() {
       setIsUploading(false); // Close modal
       fetchRepos(); // Refresh list
     } catch (err: any) {
+      fetchRepos(); // Refresh list so the errored repository shows up
       if (err.message && err.message.includes('401:')) {
         router.push('/login');
       } else {
@@ -75,7 +117,7 @@ export default function DashboardPage() {
   };
 
   const handleDeleteClick = (e: React.MouseEvent, id: string) => {
-    e.preventDefault(); // prevent Link navigation
+    e.preventDefault();
     e.stopPropagation();
     setRepoToDelete(id);
   };
@@ -109,7 +151,12 @@ export default function DashboardPage() {
     setSummaryError('');
     try {
       const summaryData = await getRepositorySummary(repo.id);
-      setSummary(summaryData.summary);
+      const cleanedSummary = (summaryData.summary || '')
+        .replace(/^```markdown\s*/i, '')
+        .replace(/^```\s*/, '')
+        .replace(/\s*```$/, '')
+        .trim();
+      setSummary(cleanedSummary);
       
       const filesData = await getRepositoryFiles(repo.id);
       setInsightsFiles(filesData);
@@ -127,94 +174,120 @@ export default function DashboardPage() {
   }, [repos, searchQuery]);
 
   return (
-    <div className="flex flex-col h-full max-w-5xl mx-auto space-y-8">
-      <div className="flex justify-between items-end border-b-2 border-retro-green-dim pb-4">
-        <div>
-          <h1 className="text-4xl uppercase tracking-wider mb-2">&gt; REPOSITORY_INDEX</h1>
-          <p className="text-xl text-retro-green-dim">
-            {isLoading ? 'SYS.SCAN() IN PROGRESS...' : `SYS.SCAN() COMPLETE. ${repos.length} REPOSITORIES FOUND.`}
+    <div className="flex flex-col h-full w-full max-w-7xl mx-auto space-y-10 animate-reveal-up">
+      
+      {/* Editorial Header */}
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end border-b border-lux-border pb-6 gap-6">
+        <div className="space-y-1">
+          <h1 className="text-3xl md:text-4xl font-serif font-light tracking-widest text-lux-creme uppercase">
+            {c.title}
+          </h1>
+          <p className="text-[10px] font-mono tracking-[0.25em] text-lux-creme-dim uppercase">
+            {isLoading ? c.subtitleScanning : c.subtitleSynchronized(repos.length)}
           </p>
         </div>
         
         <button 
           onClick={() => setIsUploading(true)}
-          className="border-2 border-retro-cyan text-retro-cyan px-6 py-3 text-xl hover:bg-retro-cyan hover:text-retro-bg shadow-retro shadow-retro-cyan hover:shadow-retro-hover hover:translate-x-[2px] hover:translate-y-[2px] transition-all uppercase flex items-center gap-2"
+          className="border border-lux-gold/30 bg-lux-card hover:bg-lux-gold hover:text-lux-bg px-6 py-3 font-mono text-xs tracking-widest font-bold uppercase transition-all duration-500 flex items-center gap-2"
         >
-          <Upload className="w-5 h-5" />
-          <span>Upload ZIP</span>
+          <Upload className="w-4 h-4" />
+          <span>{c.buttonUploadZip}</span>
         </button>
       </div>
 
-      {/* Search Input */}
-      <div className="border-2 border-retro-green p-4 bg-retro-bg flex items-center gap-3 shadow-retro shadow-retro-green/20">
-        <span className="text-retro-green font-bold text-xl uppercase font-mono">&gt; SEARCH_REPO:</span>
+      {/* Sleek Search Interface */}
+      <div className="border border-lux-border p-4 bg-lux-card/25 backdrop-blur-md flex items-center gap-3">
+        <span className="text-[10px] font-mono tracking-widest text-lux-gold uppercase">{c.searchLabel}</span>
         <input
           type="text"
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
-          placeholder="ENTER REPOSITORY NAME..."
-          className="bg-transparent border-b border-retro-green/30 focus:border-retro-green text-retro-green text-xl outline-none font-mono flex-1 uppercase placeholder-retro-green-dim/30"
+          placeholder={c.searchPlaceholder}
+          className="bg-transparent border-b border-lux-border/60 focus:border-lux-gold/50 text-lux-creme text-sm outline-none font-mono flex-1 uppercase placeholder-lux-creme-dim/30 py-1 transition-colors duration-300"
         />
         {searchQuery && (
           <button
             onClick={() => setSearchQuery('')}
-            className="text-retro-green-dim hover:text-retro-green text-lg font-bold border border-retro-green-dim px-2 py-0.5"
+            className="text-lux-creme-dim hover:text-lux-gold text-[10px] font-mono border border-lux-border px-2.5 py-1 uppercase"
           >
-            [CLEAR]
+            {c.searchClear}
           </button>
         )}
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      {/* Catalog Grid */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
         {filteredRepos.length === 0 ? (
-          <div className="col-span-full border-2 border-dashed border-retro-green/40 p-8 text-center bg-retro-green/5">
-            <p className="text-xl text-retro-green-dim uppercase font-mono">&gt; NO MATCHING REPOSITORIES FOUND</p>
+          <div className="col-span-full border border-dashed border-lux-border/80 p-12 text-center bg-lux-card/5 animate-fade-in">
+            <p className="text-xs font-mono text-lux-creme-dim uppercase tracking-widest">{c.emptyCatalog}</p>
           </div>
         ) : (
           filteredRepos.map((repo) => (
-            <Link key={repo.id} href={`/repo/${repo.id}`} className="block">
-              <div className="border-2 border-retro-green p-6 hover:bg-retro-green/10 transition-colors h-full flex flex-col group relative">
-                <div className="absolute top-2 right-2 flex items-center gap-3">
+            <Link key={repo.id} href={`/repo/${repo.id}`} className="block group">
+              <div className="border border-lux-border p-6 bg-lux-card/15 hover:bg-lux-card/35 hover:border-lux-gold/30 transition-all duration-500 h-full flex flex-col relative">
+                
+                {/* Actions overlay */}
+                <div className="absolute top-4 right-4 flex items-center gap-4">
                   {repo.status === 'ready' && (
                     <button 
                       onClick={(e) => handleOpenInsights(e, repo)}
-                      className="text-retro-cyan hover:text-white transition-all opacity-50 group-hover:opacity-100 hover:scale-110 z-10 p-1"
+                      className="text-lux-creme-dim hover:text-lux-gold transition-colors duration-300 z-10 p-1"
                       title="Show System Insights"
                     >
-                      <Info className="w-6 h-6" />
+                      <Info className="w-4.5 h-4.5" />
                     </button>
                   )}
                   <button 
                     onClick={(e) => handleDeleteClick(e, repo.id)} 
-                    className="text-red-500 hover:text-red-400 transition-all opacity-50 group-hover:opacity-100 hover:scale-110 z-10 p-1"
+                    className="text-red-400 z-10 p-1"
                     title="Purge Repository"
                   >
-                    <Trash2 className="w-6 h-6" />
+                    <Trash2 className="w-4.5 h-4.5" />
                   </button>
-                  <div className="opacity-50 group-hover:opacity-100 transition-opacity">
-                    {repo.status === 'ready' ? <CheckCircle className="text-retro-green w-6 h-6" /> : <Clock className="text-yellow-500 animate-pulse w-6 h-6" />}
+                  <div className="text-lux-creme-dim/50">
+                    {repo.status === 'ready' ? (
+                      <CheckCircle className="text-emerald-400 w-4.5 h-4.5" />
+                    ) : repo.status === 'error' ? (
+                      <AlertTriangle className="text-red-400 w-4.5 h-4.5" />
+                    ) : (
+                      <Clock className="text-lux-copper animate-pulse w-4.5 h-4.5" />
+                    )}
                   </div>
                 </div>
                 
-                <h3 className="text-2xl font-bold uppercase mb-4 text-retro-green">{repo.name}</h3>
+                <h3 className="text-xl font-serif font-light tracking-wide text-lux-creme group-hover:text-lux-gold transition-colors duration-300 mb-6 uppercase">
+                  {repo.name}
+                </h3>
+
+                {repo.status === 'error' && (
+                  <div className="mb-4 text-[10px] font-mono text-red-400 border border-red-500/25 bg-red-950/10 px-2 py-1.5 uppercase tracking-wider flex items-center gap-1.5">
+                    <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0" />
+                    <span>
+                      {repo.chunkCount > 0 
+                        ? "Can't use on RAG, embedding failed" 
+                        : "Uploaded but can't chunk into RAG, chat option not available"}
+                    </span>
+                  </div>
+                )}
                 
-                <div className="space-y-2 text-lg mb-6 flex-1">
-                  <div className="flex justify-between">
-                    <span className="text-retro-green-dim">PRIMARY_LANG:</span>
-                    <span>{repo.primaryLanguage || 'Unknown'}</span>
+                <div className="space-y-3 text-xs font-mono mb-8 flex-1">
+                  <div className="flex justify-between border-b border-lux-border/30 pb-1.5">
+                    <span className="text-lux-creme-dim uppercase">{c.cardPrimaryLang}</span>
+                    <span className="text-lux-creme">{repo.primaryLanguage || 'Unknown'}</span>
                   </div>
-                  <div className="flex justify-between">
-                    <span className="text-retro-green-dim">FILE_COUNT:</span>
-                    <span>{repo.fileCount || 0}</span>
+                  <div className="flex justify-between border-b border-lux-border/30 pb-1.5">
+                    <span className="text-lux-creme-dim uppercase">{c.cardFileCount}</span>
+                    <span className="text-lux-creme">{repo.fileCount || 0}</span>
                   </div>
-                  <div className="flex justify-between">
-                    <span className="text-retro-green-dim">EMBEDDING_CHUNKS:</span>
-                    <span>{repo.chunkCount || 0}</span>
+                  <div className="flex justify-between border-b border-lux-border/30 pb-1.5">
+                    <span className="text-lux-creme-dim uppercase">{c.cardIndexChunks}</span>
+                    <span className="text-lux-creme">{repo.chunkCount || 0}</span>
                   </div>
                 </div>
                 
-                <div className="text-sm text-retro-green-dim mt-auto border-t border-retro-green/30 pt-2">
-                  UPLOADED: {new Date(repo.createdAt).toLocaleDateString()}
+                <div className="text-[9px] font-mono text-lux-creme-dim opacity-60 mt-auto border-t border-lux-border/30 pt-3">
+                  {c.cardIndexedLabel} // {new Date(repo.createdAt).toLocaleDateString()} {new Date(repo.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                 </div>
               </div>
             </Link>
@@ -222,26 +295,48 @@ export default function DashboardPage() {
         )}
       </div>
 
+      {/* ZIP Upload Modal */}
       {isUploading && (
-        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
-          <div className="border-2 border-retro-cyan bg-retro-bg p-8 max-w-2xl w-full shadow-retro shadow-retro-cyan">
-            <h2 className="text-3xl uppercase text-retro-cyan mb-6 border-b-2 border-retro-cyan/50 pb-2">&gt; INITIALIZE_UPLOAD()</h2>
-            
+        <div className="fixed inset-0 bg-lux-bg/85 backdrop-blur-md flex items-center justify-center z-50 p-4 animate-fade-in">
+          <div className="border border-lux-border bg-lux-card p-8 max-w-2xl w-full shadow-lux space-y-8 animate-reveal-up">
+            <div className="flex justify-between items-start border-b border-lux-border pb-4">
+              <div className="space-y-1">
+                <h2 className="text-2xl font-serif font-light tracking-widest text-lux-creme uppercase">{c.modalUploadTitle}</h2>
+                <p className="text-[9px] font-mono tracking-widest text-lux-creme-dim uppercase">{c.modalUploadSubtitle}</p>
+              </div>
+              <button 
+                onClick={() => {
+                  if (isUploadingFile || isImportingGithub) return;
+                  setIsUploading(false);
+                  setUploadError('');
+                  setGithubUrl('');
+                }}
+                className="text-lux-creme-dim hover:text-lux-creme p-1"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
             
             {uploadError && (
-              <div className="bg-red-500/20 border-2 border-red-500 text-red-500 p-4 mb-6 flex items-center gap-3">
-                <AlertTriangle className="w-6 h-6" />
+              <div className="bg-lux-copper/10 border border-lux-copper/45 text-lux-copper p-4 text-xs font-mono flex items-center gap-3">
+                <AlertTriangle className="w-4 h-4 flex-shrink-0" />
                 <span>{uploadError}</span>
               </div>
             )}
 
             <div 
-              className={`border-2 border-dashed border-retro-green-dim p-12 flex flex-col items-center justify-center text-center cursor-pointer transition-colors mb-6 ${isUploadingFile ? 'opacity-50 pointer-events-none' : 'hover:border-retro-green hover:bg-retro-green/5'}`}
+              className={`border border-dashed border-lux-border p-12 flex flex-col items-center justify-center text-center cursor-pointer transition-all duration-300 ${
+                isUploadingFile || isImportingGithub 
+                  ? 'opacity-40 pointer-events-none' 
+                  : 'hover:border-lux-gold/40 hover:bg-lux-bg/40'
+              }`}
               onClick={() => fileInputRef.current?.click()}
             >
-              <Upload className={`w-16 h-16 text-retro-green mb-4 ${isUploadingFile ? 'animate-bounce' : ''}`} />
-              <p className="text-2xl mb-2">{isUploadingFile ? 'UPLOADING...' : 'CLICK TO BROWSE ZIP FILE'}</p>
-              <p className="text-retro-green-dim text-lg">(MAX 50MB)</p>
+              <Upload className={`w-12 h-12 text-lux-gold mb-4 ${isUploadingFile ? 'animate-bounce' : 'opacity-70'}`} />
+              <p className="text-sm font-mono tracking-wide text-lux-creme mb-1">
+                {isUploadingFile ? c.dropzoneLoading : c.dropzoneText}
+              </p>
+              <p className="text-[10px] font-mono text-lux-creme-dim">{c.dropzoneSizeNote}</p>
               <input 
                 type="file" 
                 accept=".zip,application/zip" 
@@ -251,57 +346,97 @@ export default function DashboardPage() {
               />
             </div>
             
-            <div className="flex justify-end gap-4">
+            <div className="flex items-center gap-4">
+              <div className="flex-1 border-t border-lux-border"></div>
+              <span className="text-[10px] font-mono text-lux-creme-dim font-bold uppercase tracking-widest">or</span>
+              <div className="flex-1 border-t border-lux-border"></div>
+            </div>
+
+            {/* GitHub Import Section */}
+            <form onSubmit={handleGithubImport} className="space-y-3">
+              <label className="block text-[10px] font-mono tracking-widest text-lux-creme-dim uppercase">
+                {c.githubLabel}
+              </label>
+              <div className="flex flex-col sm:flex-row gap-4">
+                <div className="flex-1 border border-lux-border focus-within:border-lux-gold/40 bg-lux-bg/50 p-3 flex items-center gap-3 transition-colors duration-300">
+                  <Github className="w-5 h-5 text-lux-creme-dim flex-shrink-0" />
+                  <input
+                    type="text"
+                    value={githubUrl}
+                    onChange={(e) => setGithubUrl(e.target.value)}
+                    placeholder={c.githubPlaceholder}
+                    disabled={isUploadingFile || isImportingGithub}
+                    className="bg-transparent text-lux-creme text-sm outline-none font-mono flex-1 placeholder-lux-creme-dim/30"
+                  />
+                </div>
+                <button
+                  type="submit"
+                  disabled={!githubUrl.trim() || isUploadingFile || isImportingGithub}
+                  className="border border-lux-gold/30 bg-lux-bg hover:bg-lux-gold hover:text-lux-bg px-6 py-3 font-mono text-xs tracking-widest font-bold uppercase transition-all duration-500 disabled:opacity-50"
+                >
+                  {isImportingGithub ? c.githubImportLoading : c.githubImportButton}
+                </button>
+              </div>
+            </form>
+
+            <div className="flex justify-end gap-4 border-t border-lux-border pt-4">
               <button 
-                onClick={() => setIsUploading(false)}
-                className="border-2 border-retro-green-dim text-retro-green-dim px-6 py-2 text-xl hover:border-retro-green hover:text-retro-green transition-colors uppercase"
+                onClick={() => {
+                  if (isUploadingFile || isImportingGithub) return;
+                  setIsUploading(false);
+                  setUploadError('');
+                  setGithubUrl('');
+                }}
+                disabled={isUploadingFile || isImportingGithub}
+                className="border border-lux-border text-lux-creme-dim px-6 py-2.5 font-mono text-xs tracking-widest uppercase hover:text-lux-creme transition-colors duration-300 disabled:opacity-50"
               >
-                Abort
+                {c.modalCancelButton}
               </button>
             </div>
+
           </div>
         </div>
       )}
 
       {/* Delete Confirmation Modal */}
       {repoToDelete && (
-        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
-          <div className="border-2 border-red-500 bg-retro-bg p-8 max-w-lg w-full shadow-retro shadow-red-500">
-            <h2 className="text-2xl uppercase text-red-500 mb-4 border-b-2 border-red-500/50 pb-2 flex items-center gap-2">
-              <AlertTriangle /> &gt; CONFIRM_DELETION
+        <div className="fixed inset-0 bg-lux-bg/85 backdrop-blur-md flex items-center justify-center z-50 p-4 animate-fade-in">
+          <div className="border border-red-500/30 bg-lux-card p-8 max-w-lg w-full shadow-lux space-y-6 animate-reveal-up">
+            <h2 className="text-xl font-serif font-light tracking-widest text-red-400 uppercase border-b border-red-500/20 pb-3 flex items-center gap-2.5">
+              <AlertTriangle className="text-red-400" /> {c.deleteTitle}
             </h2>
-            <p className="text-lg text-red-400 mb-6">
-              WARNING: This action is irreversible. All processed chunks, embeddings, and chat history for this repository will be purged from the database.
+            <p className="text-xs font-mono text-red-200/70 leading-relaxed">
+              {c.deleteWarning}
             </p>
-            <div className="flex justify-end gap-4">
+            <div className="flex justify-end gap-4 border-t border-lux-border pt-4">
               <button 
                 onClick={() => setRepoToDelete(null)}
-                className="border-2 border-retro-green-dim text-retro-green-dim px-6 py-2 hover:border-retro-green hover:text-retro-green transition-colors uppercase"
+                className="border border-lux-border text-lux-creme-dim px-6 py-2.5 font-mono text-xs tracking-widest uppercase hover:text-lux-creme transition-colors duration-300"
                 disabled={isDeleting}
               >
-                Abort
+                {c.deleteAbort}
               </button>
               <button 
                 onClick={confirmDelete}
-                className="bg-red-500 text-retro-bg px-6 py-2 font-bold hover:bg-red-400 transition-colors uppercase border-2 border-red-500"
+                className="border border-red-500/35 bg-red-950/20 text-red-400 hover:bg-red-500 hover:text-lux-bg px-6 py-2.5 font-mono text-xs tracking-widest font-bold uppercase transition-all duration-500"
                 disabled={isDeleting}
               >
-                {isDeleting ? 'PURGING...' : 'CONFIRM_PURGE'}
+                {isDeleting ? c.deleteConfirmLoading : c.deleteConfirm}
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Insight Panel Modal */}
+      {/* System Insights Modal Overlay */}
       {isInsightOpen && selectedRepoForInsights && (
-        <div className="fixed inset-0 z-50 bg-retro-bg/95 backdrop-blur-sm p-4 md:p-6 flex flex-col font-mono text-retro-green">
-          {/* Modal Header */}
-          <div className="border-2 border-retro-cyan bg-retro-bg/90 p-4 mb-4 flex justify-between items-center shadow-retro shadow-retro-cyan">
+        <div className="fixed inset-0 z-50 bg-lux-bg/95 backdrop-blur-md p-6 md:p-12 flex flex-col animate-fade-in">
+          {/* Header */}
+          <div className="border border-lux-gold/30 bg-lux-card/40 p-5 mb-8 flex justify-between items-center shadow-lux animate-reveal-up">
             <div className="flex items-center gap-3">
-              <Info className="text-retro-cyan w-6 h-6 animate-pulse" />
-              <h2 className="text-xl md:text-2xl uppercase tracking-widest text-retro-cyan font-bold">
-                SYSTEM_INSIGHTS_V1.0 // {selectedRepoForInsights.name}
+              <Info className="text-lux-gold w-5 h-5 animate-pulse" />
+              <h2 className="text-lg md:text-xl font-serif font-light tracking-widest text-lux-creme uppercase">
+                {c.insightsTitle} // {selectedRepoForInsights.name}
               </h2>
             </div>
             <button 
@@ -309,65 +444,64 @@ export default function DashboardPage() {
                 setIsInsightOpen(false);
                 setSelectedRepoForInsights(null);
               }}
-              className="p-2 border-2 border-retro-cyan text-retro-cyan hover:bg-retro-cyan hover:text-retro-bg transition-colors"
-              title="Exit insights"
+              className="p-2 border border-lux-border text-lux-creme-dim hover:text-lux-creme hover:border-lux-creme transition-colors duration-300"
+              title="Exit Diagnostics"
             >
-              <X className="w-6 h-6" />
+              <X className="w-5 h-5" />
             </button>
           </div>
 
-          {/* Modal Content */}
-          <div className="flex-1 flex flex-col md:flex-row gap-6 min-h-0 overflow-y-auto">
-            {/* Left Column: AI Summary */}
-            <div className="flex-1 md:flex-[0.7] border-2 border-retro-green flex flex-col bg-retro-bg overflow-hidden shadow-retro shadow-retro-green">
-              <div className="border-b-2 border-retro-green p-3 bg-retro-green/20">
-                <span className="uppercase tracking-widest text-base font-bold text-retro-green">AI_DECRYPTED_ARCHITECTURE</span>
+          {/* Core Content Grid */}
+          <div className="flex-1 flex flex-col md:flex-row gap-8 min-h-0 overflow-y-auto animate-reveal-up delay-100">
+            
+            {/* AI Architecture Blueprint */}
+            <div className="flex-1 md:flex-[0.65] border border-lux-border flex flex-col bg-lux-card/15 overflow-hidden">
+              <div className="border-b border-lux-border p-4 bg-lux-card/40">
+                <span className="text-[10px] font-mono tracking-widest text-lux-gold uppercase font-bold">{c.insightsAiBlueprint}</span>
               </div>
               
-              <div className="flex-1 overflow-y-auto p-6 text-gray-100 scrollbar-thin select-text">
+              <div className="flex-1 overflow-y-auto p-8 text-lux-creme select-text leading-relaxed font-mono text-xs">
                 {isSummaryLoading ? (
                   <div className="flex flex-col items-center justify-center h-full space-y-4">
-                    <div className="w-12 h-12 border-4 border-retro-green border-t-transparent animate-spin" />
-                    <p className="text-retro-green animate-pulse">&gt; QUERYING GEMINI INTEL CORE...</p>
-                    <p className="text-xs text-retro-green-dim">&gt; ANALYZING REPO TREE, README, AND DEPENDENCIES...</p>
+                    <div className="w-8 h-8 border-2 border-lux-gold border-t-transparent animate-spin" />
+                    <p className="text-lux-gold animate-pulse text-[10px] uppercase tracking-widest">&gt; {c.insightsGeminiLoading}</p>
                   </div>
                 ) : summaryError ? (
-                  <div className="text-red-500 border border-red-500 p-4 bg-red-500/10">
-                    <p className="font-bold">&gt; ERROR_LOADING_SUMMARY</p>
+                  <div className="text-lux-copper border border-lux-copper/30 p-4 bg-lux-copper/5">
+                    <p className="font-bold">&gt; {c.insightsDecompileError}</p>
                     <p className="text-sm mt-2">{summaryError}</p>
                   </div>
                 ) : (
-                  <div className="prose prose-invert max-w-none text-retro-green font-mono">
-                    <div className="space-y-6">
-                      {summary.split('# ').map((section: string, idx: number) => {
-                        if (!section.trim()) return null;
-                        const lines = section.split('\n');
-                        const title = lines[0];
-                        const body = lines.slice(1).join('\n');
-                        return (
-                          <div key={idx} className="border border-retro-green/30 p-4 bg-retro-green/5">
-                            <h3 className="text-lg font-bold text-retro-cyan border-b border-retro-cyan/30 pb-1 mb-2 uppercase tracking-wide">
-                              &gt; {title}
-                            </h3>
-                            <div className="whitespace-pre-wrap text-sm leading-relaxed text-retro-green">
-                              {body}
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
+                  <div className="space-y-8">
+                    {summary.split('# ').map((section: string, idx: number) => {
+                      if (!section.trim()) return null;
+                      const lines = section.split('\n');
+                      const title = lines[0];
+                      const body = lines.slice(1).join('\n');
+                      return (
+                        <div key={idx} className="border border-lux-border/60 p-5 bg-lux-bg/40">
+                          <h3 className="text-xs font-serif font-light text-lux-gold border-b border-lux-border/40 pb-2 mb-3 uppercase tracking-widest">
+                            {title}
+                          </h3>
+                          <div 
+                            className="whitespace-pre-wrap text-lux-creme-dim leading-relaxed text-xs"
+                            dangerouslySetInnerHTML={{ __html: formatMarkdown(body) }}
+                          />
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
               </div>
             </div>
 
-            {/* Right Column: Codebase Stats */}
-            <div className="flex-1 md:flex-[0.3] border-2 border-retro-cyan flex flex-col bg-retro-bg overflow-hidden shadow-retro shadow-retro-cyan">
-              <div className="border-b-2 border-retro-cyan p-3 bg-retro-cyan/20">
-                <span className="uppercase tracking-widest text-base font-bold text-retro-cyan">METRIC_DIAGNOSTICS</span>
+            {/* Metrics Sidebar */}
+            <div className="flex-1 md:flex-[0.35] border border-lux-border flex flex-col bg-lux-card/15 overflow-hidden">
+              <div className="border-b border-lux-border p-4 bg-lux-card/40">
+                <span className="text-[10px] font-mono tracking-widest text-lux-gold uppercase font-bold">{c.insightsMetrics}</span>
               </div>
 
-              <div className="flex-1 overflow-y-auto p-6 space-y-6 scrollbar-thin text-retro-green">
+              <div className="flex-1 overflow-y-auto p-6 space-y-8 font-mono text-xs text-lux-creme scrollbar-thin">
                 <StatsSummary 
                   fileCount={selectedRepoForInsights.fileCount} 
                   chunkCount={selectedRepoForInsights.chunkCount} 
@@ -381,6 +515,7 @@ export default function DashboardPage() {
                 )}
               </div>
             </div>
+
           </div>
         </div>
       )}

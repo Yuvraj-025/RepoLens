@@ -41,6 +41,8 @@ model Repository {
   files           RepositoryFile[]
   chunks          Chunk[]
   chats           ChatHistory[]
+
+  @@index([userId])
 }
 
 model RepositoryFile {
@@ -54,6 +56,8 @@ model RepositoryFile {
   content      String     @db.Text
   modifiedAt   DateTime?
   chunks       Chunk[]
+
+  @@index([repositoryId])
 }
 
 model Chunk {
@@ -69,6 +73,9 @@ model Chunk {
   content      String         @db.Text
   embedding    Unsupported("vector(768)")?
   isEmbedded   Boolean        @default(false)
+
+  @@index([repositoryId])
+  @@index([fileId])
 }
 
 model ChatHistory {
@@ -81,4 +88,8 @@ model ChatHistory {
   aiResponse   String     @db.Text
   sourcesJson  Json       @default("[]")
   createdAt    DateTime   @default(now())
+
+  @@index([repositoryId])
+  @@index([userId])
 }
+

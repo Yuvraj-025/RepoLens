@@ -7,11 +7,11 @@ export class EmbeddingService {
   private readonly apiKey = process.env.GEMINI_API_KEY || '';
   private readonly embeddingModel = (process.env.GEMINI_EMBEDDING_MODEL || 'text-embedding-004').replace(/^"|"$/g, '');
 
-  constructor(private prisma: PrismaService) {}
+  constructor(private prisma: PrismaService) { }
 
   private getModelNameAndPath(): { name: string; path: string } {
-    const name = this.embeddingModel.startsWith('models/') 
-      ? this.embeddingModel.substring(7) 
+    const name = this.embeddingModel.startsWith('models/')
+      ? this.embeddingModel.substring(7)
       : this.embeddingModel;
     return {
       name,
@@ -29,7 +29,7 @@ export class EmbeddingService {
 
     const { name: modelName, path: modelPath } = this.getModelNameAndPath();
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:embedContent?key=${this.apiKey}`;
-    
+
     try {
       const response = await fetch(url, {
         method: 'POST',
@@ -108,6 +108,34 @@ export class EmbeddingService {
     }
   }
 
+  private async delay(ms: number): Promise<void> {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+  }
+
+  private async runWithRetry<T>(fn: () => Promise<T>, retries = 5, initialDelay = 1000): Promise<T> {
+    let currentDelay = initialDelay;
+    for (let attempt = 1; attempt <= retries; attempt++) {
+      try {
+        return await fn();
+      } catch (error: any) {
+        const isRateLimit =
+          error.message?.includes('Too Many Requests') ||
+          error.message?.includes('429') ||
+          error.message?.includes('RESOURCE_EXHAUSTED');
+        if (isRateLimit && attempt < retries) {
+          this.logger.warn(
+            `Rate limit hit (429). Retrying attempt ${attempt}/${retries} after ${currentDelay}ms...`,
+          );
+          await this.delay(currentDelay);
+          currentDelay *= 2;
+        } else {
+          throw error;
+        }
+      }
+    }
+    throw new Error('Max retries exceeded');
+  }
+
   /**
    * Processes all unembedded chunks for a repository, calls Gemini API, and saves vectors to PostgreSQL.
    */
@@ -134,26 +162,30 @@ export class EmbeddingService {
       const texts = chunkBatch.map(c => c.content);
 
       try {
-        const embeddings = await this.getEmbeddingsForBatch(texts);
-        
+        const embeddings = await this.runWithRetry(() => this.getEmbeddingsForBatch(texts));
+
         if (embeddings.length !== chunkBatch.length) {
           throw new Error(`Size mismatch: requested ${chunkBatch.length} embeddings, received ${embeddings.length}`);
         }
 
-        // Update each chunk in pgvector database with raw SQL
-        for (let j = 0; j < chunkBatch.length; j++) {
-          const chunk = chunkBatch[j];
-          const embedding = embeddings[j];
-          const vectorStr = `[${embedding.join(',')}]`;
+        // Update chunks in pgvector database concurrently to speed up indexing
+        await Promise.all(
+          chunkBatch.map((chunk, j) => {
+            const embedding = embeddings[j];
+            const vectorStr = `[${embedding.join(',')}]`;
+            return this.prisma.$executeRawUnsafe(
+              `UPDATE "Chunk" SET "embedding" = $1::vector, "isEmbedded" = true WHERE "id" = $2::uuid`,
+              vectorStr,
+              chunk.id
+            );
+          })
+        );
 
-          await this.prisma.$executeRawUnsafe(
-            `UPDATE "Chunk" SET "embedding" = $1::vector, "isEmbedded" = true WHERE "id" = $2::uuid`,
-            vectorStr,
-            chunk.id
-          );
-        }
 
         successfullyEmbedded += chunkBatch.length;
+
+        // Introduce a small 200ms delay between successful batches to respect API limits
+        await this.delay(200);
       } catch (error: any) {
         this.logger.error(`Failed to process embedding batch starting at index ${i}: ${error.message}`);
         // Bubble up error to fail the ingestion transaction/workflow

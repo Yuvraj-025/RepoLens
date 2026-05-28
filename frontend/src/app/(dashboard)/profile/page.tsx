@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { User, Mail, Lock, Save, AlertTriangle, CheckCircle } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { getProfile, updateProfile } from '@/lib/api/auth';
+import { copyContent } from '@/lib/content';
 
 export default function ProfilePage() {
   const router = useRouter();
@@ -15,6 +16,8 @@ export default function ProfilePage() {
   });
   const [isSaving, setIsSaving] = useState(false);
   const [notification, setNotification] = useState<{type: 'success' | 'error', message: string} | null>(null);
+
+  const c = copyContent.profile;
 
   useEffect(() => {
     const fetchProfile = async () => {
@@ -48,7 +51,7 @@ export default function ProfilePage() {
       if (formData.password) dataToUpdate.password = formData.password;
       
       await updateProfile(dataToUpdate);
-      setNotification({ type: 'success', message: 'PROFILE.UPDATE(SUCCESS)' });
+      setNotification({ type: 'success', message: c.successNotification });
       setFormData(prev => ({ ...prev, password: '', confirmPassword: '' })); // clear passwords
     } catch (err: any) {
       if (err.message && err.message.includes('401:')) {
@@ -62,89 +65,114 @@ export default function ProfilePage() {
   };
 
   return (
-    <div className="max-w-3xl mx-auto h-full flex flex-col">
-      <div className="border-b-2 border-retro-green-dim pb-4 mb-8">
-        <h1 className="text-4xl uppercase tracking-wider mb-2">&gt; USER_PROFILE_SYS</h1>
-        <p className="text-xl text-retro-green-dim">MODIFY ENTITY PARAMETERS</p>
+    <div className="max-w-3xl mx-auto h-full flex flex-col space-y-8 animate-reveal-up">
+      
+      {/* Page Header */}
+      <div className="border-b border-lux-border pb-4 mb-4">
+        <h1 className="text-3xl font-serif font-light tracking-widest text-lux-creme uppercase">
+          {c.title}
+        </h1>
+        <p className="text-[10px] font-mono tracking-[0.25em] text-lux-creme-dim mt-1 uppercase">
+          {c.subtitle}
+        </p>
       </div>
 
       {notification && (
-        <div className={`border-2 p-4 mb-8 flex items-center gap-3 ${notification.type === 'error' ? 'bg-red-500/20 border-red-500 text-red-500' : 'bg-retro-green/20 border-retro-green text-retro-green'}`}>
-          {notification.type === 'error' ? <AlertTriangle className="w-6 h-6" /> : <CheckCircle className="w-6 h-6" />}
-          <span className="text-xl font-bold">{notification.message}</span>
+        <div 
+          className={`border p-4 text-xs font-mono flex items-center gap-3 ${
+            notification.type === 'error' 
+              ? 'bg-lux-copper/10 border-lux-copper/40 text-lux-copper' 
+              : 'bg-lux-gold/10 border-lux-gold/45 text-lux-gold'
+          }`}
+        >
+          {notification.type === 'error' ? <AlertTriangle className="w-4 h-4 flex-shrink-0" /> : <CheckCircle className="w-4 h-4 flex-shrink-0" />}
+          <span className="font-bold">{notification.message}</span>
         </div>
       )}
 
-      <div className="border-2 border-retro-green p-8 bg-retro-bg/50 flex-1 relative overflow-y-auto">
-        <div className="absolute top-4 right-4 text-retro-green/20">
-          <User className="w-32 h-32" />
+      {/* Profile Form Card */}
+      <div className="border border-lux-border p-8 md:p-12 bg-lux-card/25 backdrop-blur-md relative overflow-hidden">
+        {/* Subtle decorative wireframe overlay */}
+        <div className="absolute -top-12 -right-12 text-lux-border opacity-20 pointer-events-none">
+          <User className="w-48 h-48" />
         </div>
         
         <form onSubmit={handleSubmit} className="space-y-8 relative z-10">
-          <div className="space-y-2">
-            <label className="text-xl uppercase text-retro-green-dim flex items-center gap-2">
-              <User className="w-5 h-5" /> ENTITY_NAME
-            </label>
-            <input 
-              type="text" 
-              value={formData.name}
-              onChange={(e) => setFormData({...formData, name: e.target.value})}
-              className="w-full bg-retro-bg border-2 border-retro-green p-3 text-xl text-retro-cyan focus:outline-none focus:border-retro-cyan transition-colors"
-            />
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {/* Alias name */}
+            <div className="space-y-2">
+              <label className="text-[10px] font-mono tracking-widest text-lux-creme-dim flex items-center gap-2 uppercase">
+                <User className="w-3.5 h-3.5 text-lux-gold" /> {c.labelName}
+              </label>
+              <input 
+                type="text" 
+                value={formData.name}
+                onChange={(e) => setFormData({...formData, name: e.target.value})}
+                className="w-full bg-lux-bg/40 border border-lux-border p-3.5 font-mono text-sm text-lux-creme focus:border-lux-gold/50 focus:outline-none transition-all duration-300"
+              />
+            </div>
+
+            {/* Comms addr */}
+            <div className="space-y-2">
+              <label className="text-[10px] font-mono tracking-widest text-lux-creme-dim flex items-center gap-2 uppercase">
+                <Mail className="w-3.5 h-3.5 text-lux-gold" /> {c.labelEmail}
+              </label>
+              <input 
+                type="email" 
+                value={formData.email}
+                onChange={(e) => setFormData({...formData, email: e.target.value})}
+                className="w-full bg-lux-bg/40 border border-lux-border p-3.5 font-mono text-sm text-lux-creme focus:border-lux-gold/50 focus:outline-none transition-all duration-300"
+              />
+            </div>
           </div>
 
-          <div className="space-y-2">
-            <label className="text-xl uppercase text-retro-green-dim flex items-center gap-2">
-              <Mail className="w-5 h-5" /> CONTACT_ADDR
-            </label>
-            <input 
-              type="email" 
-              value={formData.email}
-              onChange={(e) => setFormData({...formData, email: e.target.value})}
-              className="w-full bg-retro-bg border-2 border-retro-green p-3 text-xl text-retro-cyan focus:outline-none focus:border-retro-cyan transition-colors"
-            />
-          </div>
-
-          <div className="border-t-2 border-retro-green-dim border-dashed pt-8 mt-8 space-y-6">
-            <h3 className="text-2xl text-retro-cyan uppercase flex items-center gap-2">
-              <AlertTriangle className="w-6 h-6 text-yellow-500" /> SECURE_CREDENTIALS
+          {/* Secure Credentials Segment */}
+          <div className="border-t border-lux-border border-dashed pt-8 mt-8 space-y-6">
+            <h3 className="text-sm font-serif tracking-widest text-lux-creme uppercase flex items-center gap-2">
+              <Lock className="w-4 h-4 text-lux-gold" /> {c.sectionTitle}
             </h3>
             
-            <div className="space-y-2">
-              <label className="text-xl uppercase text-retro-green-dim flex items-center gap-2">
-                <Lock className="w-5 h-5" /> NEW_PASSWORD
-              </label>
-              <input 
-                type="password" 
-                value={formData.password}
-                onChange={(e) => setFormData({...formData, password: e.target.value})}
-                className="w-full bg-retro-bg border-2 border-retro-green p-3 text-xl text-retro-cyan focus:outline-none focus:border-retro-cyan transition-colors font-mono"
-                placeholder="[ LEAVE BLANK TO KEEP CURRENT ]"
-              />
-            </div>
-            
-            <div className="space-y-2">
-              <label className="text-xl uppercase text-retro-green-dim flex items-center gap-2">
-                <Lock className="w-5 h-5" /> VERIFY_PASSWORD
-              </label>
-              <input 
-                type="password" 
-                value={formData.confirmPassword}
-                onChange={(e) => setFormData({...formData, confirmPassword: e.target.value})}
-                className="w-full bg-retro-bg border-2 border-retro-green p-3 text-xl text-retro-cyan focus:outline-none focus:border-retro-cyan transition-colors font-mono"
-                placeholder="[ CONFIRM NEW PASSWORD ]"
-              />
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* New Password */}
+              <div className="space-y-2">
+                <label className="text-[10px] font-mono tracking-widest text-lux-creme-dim flex items-center gap-2 uppercase">
+                  {c.labelNewPassword}
+                </label>
+                <input 
+                  type="password" 
+                  value={formData.password}
+                  onChange={(e) => setFormData({...formData, password: e.target.value})}
+                  className="w-full bg-lux-bg/40 border border-lux-border p-3.5 font-mono text-sm text-lux-creme focus:border-lux-gold/50 focus:outline-none transition-all duration-300"
+                  placeholder={c.placeholderNewPassword}
+                />
+              </div>
+              
+              {/* Confirm Password */}
+              <div className="space-y-2">
+                <label className="text-[10px] font-mono tracking-widest text-lux-creme-dim flex items-center gap-2 uppercase">
+                  {c.labelConfirmPassword}
+                </label>
+                <input 
+                  type="password" 
+                  value={formData.confirmPassword}
+                  onChange={(e) => setFormData({...formData, confirmPassword: e.target.value})}
+                  className="w-full bg-lux-bg/40 border border-lux-border p-3.5 font-mono text-sm text-lux-creme focus:border-lux-gold/50 focus:outline-none transition-all duration-300"
+                  placeholder={c.placeholderConfirmPassword}
+                />
+              </div>
             </div>
           </div>
 
-          <div className="pt-8 flex justify-end">
+          {/* Submit Button */}
+          <div className="pt-6 flex justify-end">
             <button 
               type="submit"
               disabled={isSaving}
-              className="border-2 border-retro-green bg-retro-green text-retro-bg px-8 py-3 text-xl font-bold hover:bg-retro-cyan hover:border-retro-cyan shadow-retro shadow-retro-green hover:shadow-retro-hover hover:translate-x-[2px] hover:translate-y-[2px] transition-all uppercase flex items-center gap-2 disabled:opacity-50"
+              className="border border-lux-gold/30 bg-lux-card hover:bg-lux-gold hover:text-lux-bg px-8 py-3.5 font-mono text-xs tracking-[0.2em] font-bold uppercase transition-all duration-500 disabled:opacity-50 flex items-center gap-2"
             >
-              <Save className="w-6 h-6" />
-              {isSaving ? 'UPDATING...' : 'SAVE_PARAMETERS()'}
+              <Save className="w-4 h-4" />
+              {isSaving ? c.buttonLoading : c.buttonSave}
             </button>
           </div>
         </form>

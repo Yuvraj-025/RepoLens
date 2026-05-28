@@ -1,4 +1,4 @@
-import { Controller, Post, Get, Param, Delete, UploadedFile, UseInterceptors, ParseFilePipe, MaxFileSizeValidator, FileTypeValidator } from '@nestjs/common';
+import { Controller, Post, Get, Param, Delete, UploadedFile, UseInterceptors, ParseFilePipe, MaxFileSizeValidator, FileTypeValidator, Body } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { RepositoryService } from './repository.service';
 import { Request } from '@nestjs/common';
@@ -7,6 +7,16 @@ import { Throttle } from '@nestjs/throttler';
 @Controller('repository')
 export class RepositoryController {
   constructor(private readonly repositoryService: RepositoryService) {}
+
+  @Post('import-github')
+  @Throttle({ global: { limit: 3, ttl: 60000 } })
+  async importGithubRepository(
+    @Body() body: { githubUrl: string },
+    @Request() req: any,
+  ) {
+    return this.repositoryService.importGithubRepository(body.githubUrl, req.user.id);
+  }
+
 
   @Post('upload')
   @Throttle({ global: { limit: 3, ttl: 60000 } })

@@ -84,12 +84,28 @@ export class ChatService {
       return;
     }
 
+    // Load last 6 messages (3 turns) for context memory
+    let historyContext = 'None';
+    try {
+      const history = await this.prisma.chatHistory.findMany({
+        where: { repositoryId, userId },
+        orderBy: { createdAt: 'desc' },
+        take: 6,
+      });
+      history.reverse();
+      if (history.length > 0) {
+        historyContext = history.map(h => `User: ${h.userQuery}\nAssistant: ${h.aiResponse}`).join('\n\n');
+      }
+    } catch (err: any) {
+      this.logger.error(`Failed to load chat history for context: ${err.message}`);
+    }
+
     // 3. Construct prompt
     const contextText = chunks
       .map((c, i) => `Code Block #${i + 1} (File: ${c.filePath}, Lines: ${c.startLine}-${c.endLine}):\n${c.content}`)
       .join('\n\n');
 
-    const systemPrompt = `You are RepoLens, a retro-themed AI codebase chat and analysis platform.
+    const systemInstructionText = `You are RepoLens, a retro-themed AI codebase chat and analysis platform.
 You are helping a developer understand their uploaded repository.
 Answer the user's question about the codebase in a detailed, structured, and highly informative manner.
 
@@ -102,13 +118,24 @@ Rules:
 Codebase Context:
 ${contextText}
 
-User Query: ${query}`;
+Previous Chat History:
+${historyContext}`;
 
     // 4. Connect to Gemini stream endpoint
     const modelName = this.chatModel.startsWith('models/') 
       ? this.chatModel.substring(7) 
       : this.chatModel;
     const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:streamGenerateContent?key=${this.apiKey}`;
+
+    let isClientClosed = false;
+    let reader: ReadableStreamDefaultReader | null = null;
+
+    res.on('close', () => {
+      isClientClosed = true;
+      if (reader) {
+        reader.cancel().catch(() => {});
+      }
+    });
 
     try {
       const geminiRes = await fetch(geminiUrl, {
@@ -119,8 +146,11 @@ User Query: ${query}`;
         body: JSON.stringify({
           contents: [{
             role: 'user',
-            parts: [{ text: systemPrompt }],
+            parts: [{ text: query }],
           }],
+          systemInstruction: {
+            parts: [{ text: systemInstructionText }]
+          },
           generationConfig: {
             temperature: 0.2,
           },
@@ -135,12 +165,13 @@ User Query: ${query}`;
         return;
       }
 
-      const reader = geminiRes.body.getReader();
+      reader = geminiRes.body.getReader();
       const decoder = new TextDecoder();
       let aiResponseText = '';
       let streamBuffer = '';
 
       while (true) {
+        if (isClientClosed) break;
         const { done, value } = await reader.read();
         if (done) break;
 
@@ -148,6 +179,7 @@ User Query: ${query}`;
         
         const regex = /"text":\s*"((?:[^"\\]|\\.)*)"/g;
         while (true) {
+          if (isClientClosed) break;
           const match = regex.exec(streamBuffer);
           if (!match) break;
 
@@ -165,27 +197,34 @@ User Query: ${query}`;
         }
       }
 
-      reader.releaseLock();
+      if (reader) {
+        reader.releaseLock();
+      }
 
-      // 5. Persist ChatHistory
-      await this.prisma.chatHistory.create({
-        data: {
-          repositoryId,
-          userId,
-          userQuery: query,
-          aiResponse: aiResponseText,
-          sourcesJson: sources,
-        },
-      });
+      if (!isClientClosed) {
+        // 5. Persist ChatHistory
+        await this.prisma.chatHistory.create({
+          data: {
+            repositoryId,
+            userId,
+            userQuery: query,
+            aiResponse: aiResponseText,
+            sourcesJson: sources,
+          },
+        });
 
-      res.write(`data: ${JSON.stringify({ type: 'done' })}\n\n`);
+        res.write(`data: ${JSON.stringify({ type: 'done' })}\n\n`);
+      }
     } catch (err: any) {
       this.logger.error(`Error during stream execution: ${err.message}`);
-      res.write(`data: ${JSON.stringify({ type: 'error', message: 'Stream disrupted.' })}\n\n`);
+      if (!isClientClosed) {
+        res.write(`data: ${JSON.stringify({ type: 'error', message: 'Stream disrupted.' })}\n\n`);
+      }
     } finally {
       res.end();
     }
   }
+
 
   async getChatHistory(repositoryId: string, userId: string) {
     // Verify repository ownership

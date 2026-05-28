@@ -1,9 +1,125 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
-import * as AdmZip from 'adm-zip';
 import * as path from 'path';
+import { Worker } from 'worker_threads';
 import { ParsingService } from '../parsing/parsing.service';
 import { EmbeddingService } from '../embedding/embedding.service';
+
+const ZIP_WORKER_CODE = `
+const { parentPort, workerData } = require('worker_threads');
+const AdmZip = require('adm-zip');
+const path = require('path');
+
+try {
+  const { buffer } = workerData;
+  const zip = new AdmZip(Buffer.from(buffer));
+  const zipEntries = zip.getEntries();
+  
+  // Determine if all files share a single top-level directory
+  let commonRoot = null;
+  let hasMultipleRoots = false;
+  for (const entry of zipEntries) {
+    if (entry.isDirectory) continue;
+    const pPath = entry.entryName.replace(/\\\\/g, '/');
+    const parts = pPath.split('/');
+    if (parts.length === 1) {
+      hasMultipleRoots = true;
+      break;
+    }
+    const root = parts[0];
+    if (commonRoot === null) {
+      commonRoot = root;
+    } else if (commonRoot !== root) {
+      hasMultipleRoots = true;
+      break;
+    }
+  }
+  const prefixToRemove = (!hasMultipleRoots && commonRoot) ? commonRoot + '/' : '';
+
+  let totalUncompressedSize = 0;
+  const MAX_UNCOMPRESSED_SIZE = 200 * 1024 * 1024; // 200 MB limit
+  let validFileCount = 0;
+  const filesToCreate = [];
+
+  for (const entry of zipEntries) {
+    if (entry.isDirectory) continue;
+
+    // Zip Slip Prevention
+    const originalSanitized = path.normalize(entry.entryName);
+    if (originalSanitized.includes('..') || path.isAbsolute(originalSanitized)) {
+      throw new Error('Malicious path detected in ZIP: ' + entry.entryName);
+    }
+
+    let posixEntryName = entry.entryName.replace(/\\\\/g, '/');
+    if (prefixToRemove && posixEntryName.startsWith(prefixToRemove)) {
+      posixEntryName = posixEntryName.substring(prefixToRemove.length);
+    }
+
+    const sanitizedPath = path.normalize(posixEntryName);
+    const posixPath = sanitizedPath.replace(/\\\\/g, '/');
+    
+    // Ignore common build directories and hidden folders
+    if (
+      posixPath.includes('node_modules/') || 
+      posixPath.includes('/.git') || 
+      posixPath.startsWith('.git') || 
+      posixPath.includes('dist/') || 
+      posixPath.includes('build/') || 
+      posixPath.includes('__pycache__/')
+    ) {
+      continue;
+    }
+
+    // Zip Bomb Prevention
+    totalUncompressedSize += entry.header.size;
+    if (totalUncompressedSize > MAX_UNCOMPRESSED_SIZE) {
+      throw new Error('ZIP extraction exceeds maximum allowed size (Zip Bomb Protection)');
+    }
+
+    const ext = path.extname(sanitizedPath).toLowerCase();
+    const isBinaryOrLock = ['.pdf', '.png', '.jpg', '.jpeg', '.gif', '.mp4', '.zip', '.tar', '.gz', '.ico', '.svg', '.min.js', '.lock'].includes(ext) || sanitizedPath.endsWith('package-lock.json') || sanitizedPath.endsWith('yarn.lock');
+    const isTooLarge = entry.header.size > 200 * 1024; // 200KB limit for text content
+    
+    let content = '';
+    let lineCount = 0;
+
+    // Only extract text content if it's a valid text file under the size limit
+    if (!isBinaryOrLock && !isTooLarge && entry.header.size <= 5 * 1024 * 1024) {
+      const rawContent = entry.getData().toString('utf-8');
+      if (rawContent.includes('\\0')) {
+        content = ''; // Treat as binary
+      } else {
+        content = rawContent;
+        lineCount = content.split('\\n').length;
+      }
+    }
+
+    let fileDate = new Date();
+    if (entry.header && entry.header.time) {
+      fileDate = new Date(entry.header.time);
+    }
+
+    validFileCount++;
+    // Safe constraints validation (truncate long strings to prevent DB crashes)
+    const truncatedPath = posixPath.substring(0, 1024);
+    let truncatedLang = ext.replace('.', '').substring(0, 50) || (isBinaryOrLock ? 'binary' : 'text');
+    if (truncatedLang.length > 50) truncatedLang = truncatedLang.substring(0, 50);
+
+    filesToCreate.push({
+      filePath: truncatedPath,
+      language: truncatedLang,
+      lineCount: lineCount,
+      sizeBytes: entry.header.size,
+      content: content,
+      modifiedAt: fileDate
+    });
+  }
+
+  parentPort.postMessage({ success: true, filesToCreate, validFileCount });
+} catch (err) {
+  parentPort.postMessage({ success: false, error: err.message });
+}
+`;
 
 @Injectable()
 export class RepositoryService {
@@ -14,109 +130,36 @@ export class RepositoryService {
   ) {}
 
   async uploadRepository(file: Express.Multer.File, userId: string) {
-    const repoName = file.originalname.replace('.zip', '');
+    // Truncate repository name to fit VarChar(255) DB column limit
+    const repoName = file.originalname.replace('.zip', '').substring(0, 255);
     
-    // Secure ZIP Extraction logic
-    let zip;
+    // Spawn worker thread for non-blocking ZIP parsing
+    let result: { filesToCreate: any[]; validFileCount: number };
     try {
-      zip = new AdmZip(file.buffer);
-    } catch (e) {
-      throw new BadRequestException('Invalid ZIP file format');
-    }
-
-    const zipEntries = zip.getEntries();
-    
-    // Determine if all files share a single top-level directory
-    let commonRoot: string | null = null;
-    let hasMultipleRoots = false;
-    for (const entry of zipEntries) {
-      if (entry.isDirectory) continue;
-      const pPath = entry.entryName.replace(/\\/g, '/');
-      const parts = pPath.split('/');
-      if (parts.length === 1) {
-        hasMultipleRoots = true;
-        break;
-      }
-      const root = parts[0];
-      if (commonRoot === null) {
-        commonRoot = root;
-      } else if (commonRoot !== root) {
-        hasMultipleRoots = true;
-        break;
-      }
-    }
-    const prefixToRemove = (!hasMultipleRoots && commonRoot) ? commonRoot + '/' : '';
-
-    let totalUncompressedSize = 0;
-    const MAX_UNCOMPRESSED_SIZE = 200 * 1024 * 1024; // 200 MB limit
-    let validFileCount = 0;
-
-    const filesToCreate = [];
-
-    for (const entry of zipEntries) {
-      if (entry.isDirectory) continue;
-
-      // Zip Slip Prevention: ensure paths do not contain '..' or are absolute (checked on original name)
-      const originalSanitized = path.normalize(entry.entryName);
-      if (originalSanitized.includes('..') || path.isAbsolute(originalSanitized)) {
-        throw new BadRequestException(`Malicious path detected in ZIP: ${entry.entryName}`);
-      }
-
-      let posixEntryName = entry.entryName.replace(/\\/g, '/');
-      if (prefixToRemove && posixEntryName.startsWith(prefixToRemove)) {
-        posixEntryName = posixEntryName.substring(prefixToRemove.length);
-      }
-
-      const sanitizedPath = path.normalize(posixEntryName);
-
-      const posixPath = sanitizedPath.replace(/\\/g, '/');
-      // Ignore common build directories and hidden folders
-      if (posixPath.includes('node_modules/') || posixPath.includes('/.git') || posixPath.startsWith('.git') || posixPath.includes('dist/') || posixPath.includes('build/') || posixPath.includes('__pycache__/')) {
-        continue;
-      }
-
-      // Zip Bomb Prevention: Track total uncompressed size
-      totalUncompressedSize += entry.header.size;
-      if (totalUncompressedSize > MAX_UNCOMPRESSED_SIZE) {
-        throw new BadRequestException('ZIP extraction exceeds maximum allowed size (Zip Bomb Protection)');
-      }
-
-      const ext = path.extname(sanitizedPath).toLowerCase();
-      const isBinaryOrLock = ['.pdf', '.png', '.jpg', '.jpeg', '.gif', '.mp4', '.zip', '.tar', '.gz', '.ico', '.svg', '.min.js', '.lock'].includes(ext) || sanitizedPath.endsWith('package-lock.json') || sanitizedPath.endsWith('yarn.lock');
-      const isTooLarge = entry.header.size > 200 * 1024; // 200KB limit for text content
-      
-      let content = '';
-      let lineCount = 0;
-
-      // Only extract text content if it's a valid text file under the size limit
-      if (!isBinaryOrLock && !isTooLarge && entry.header.size <= 5 * 1024 * 1024) {
-        const rawContent = entry.getData().toString('utf-8');
-        // Prevent Postgres "invalid byte sequence for encoding UTF8: 0x00" 
-        // by detecting null bytes. If present, it's likely a binary file.
-        if (rawContent.includes('\0')) {
-          content = ''; // Treat as binary, skip content
-        } else {
-          content = rawContent;
-          lineCount = content.split('\n').length;
-        }
-      }
-
-      let fileDate = new Date();
-      if (entry.header && entry.header.time) {
-        // adm-zip uses 'time' or sometimes 'mtime' (in entry object itself), header.time is a date object or timestamp
-        fileDate = new Date(entry.header.time);
-      }
-
-      validFileCount++;
-      filesToCreate.push({
-        filePath: posixPath,
-        language: ext.replace('.', '') || (isBinaryOrLock ? 'binary' : 'text'),
-        lineCount: lineCount,
-        sizeBytes: entry.header.size,
-        content: content,
-        modifiedAt: fileDate
+      result = await new Promise<{ filesToCreate: any[]; validFileCount: number }>((resolve, reject) => {
+        const worker = new Worker(ZIP_WORKER_CODE, {
+          eval: true,
+          workerData: { buffer: file.buffer },
+        });
+        worker.on('message', (message) => {
+          if (message.success) {
+            resolve(message);
+          } else {
+            reject(new BadRequestException(message.error));
+          }
+        });
+        worker.on('error', (err: any) => reject(new BadRequestException(err?.message || 'Worker thread error')));
+        worker.on('exit', (code) => {
+          if (code !== 0) {
+            reject(new Error(`Worker stopped with exit code ${code}`));
+          }
+        });
       });
+    } catch (e: any) {
+      throw e instanceof BadRequestException ? e : new BadRequestException(e.message || 'Invalid ZIP file format');
     }
+
+    const { filesToCreate, validFileCount } = result;
 
     // Determine primary language based on bytes
     const languageCounts: Record<string, number> = {};
@@ -153,31 +196,95 @@ export class RepositoryService {
     try {
       // 1. Chunking
       const chunks = await this.parsingService.chunkRepositoryFiles(repository.id);
-
-      // 2. Embedding
-      if (chunks.length > 0) {
-        await this.embeddingService.generateEmbeddingsForRepository(repository.id);
+      if (chunks.length === 0) {
+        throw new Error("No code files found to chunk");
       }
 
-      // 3. Mark as ready
-      const updated = await this.prisma.repository.update({
-        where: { id: repository.id },
-        data: {
-          status: 'ready',
-          chunkCount: chunks.length
-        }
-      });
-      return { repositoryId: updated.id, status: updated.status };
-    } catch (error) {
+      // 2. Embedding
+      try {
+        await this.embeddingService.generateEmbeddingsForRepository(repository.id);
+        
+        // 3. Mark as ready since chunking and embedding succeeded
+        const updated = await this.prisma.repository.update({
+          where: { id: repository.id },
+          data: {
+            status: 'ready',
+            chunkCount: chunks.length
+          }
+        });
+        return { repositoryId: updated.id, status: updated.status };
+      } catch (embError: any) {
+        console.error(`Embedding failed after successful chunking: ${embError.message}`);
+        
+        // Mark as error but set chunkCount since chunking succeeded
+        const updated = await this.prisma.repository.update({
+          where: { id: repository.id },
+          data: {
+            status: 'error',
+            chunkCount: chunks.length
+          }
+        });
+        return { repositoryId: updated.id, status: updated.status };
+      }
+    } catch (error: any) {
+      console.error(`Processing failed (chunking failed): ${error.message}`);
       await this.prisma.repository.update({
         where: { id: repository.id },
         data: {
-          status: 'error'
+          status: 'error',
+          chunkCount: 0
         }
       }).catch(() => {});
-      throw error;
+      throw new BadRequestException("Uploaded but can't chunk into RAG, chat option not available");
     }
   }
+
+  async importGithubRepository(githubUrl: string, userId: string) {
+    const match = githubUrl.match(/github\.com\/([^/]+)\/([^/]+)/);
+    if (!match) {
+      throw new BadRequestException('Invalid GitHub repository URL');
+    }
+
+    const owner = match[1];
+    // Strip trailing slashes, fragments, query params or .git extension
+    const repo = match[2].split(/[?#]/)[0].replace(/\/+$/, '').replace('.git', '');
+
+    let buffer: Buffer;
+    try {
+      // Fetch public repository ZIP archive
+      const response = await fetch(`https://api.github.com/repos/${owner}/${repo}/zipball`, {
+        headers: {
+          'User-Agent': 'RepoLens-NestJS-Backend',
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error(`GitHub API returned ${response.status} ${response.statusText}`);
+      }
+
+      const arrayBuffer = await response.arrayBuffer();
+      buffer = Buffer.from(arrayBuffer);
+    } catch (e: any) {
+      throw new BadRequestException(`Failed to download repository from GitHub: ${e.message}`);
+    }
+
+    // Mock Express.Multer.File to invoke standard upload repository pipeline
+    const mockFile: Express.Multer.File = {
+      fieldname: 'file',
+      originalname: `${repo}.zip`,
+      encoding: '7bit',
+      mimetype: 'application/zip',
+      buffer: buffer,
+      size: buffer.length,
+      stream: null as any,
+      destination: '',
+      filename: '',
+      path: '',
+    };
+
+    return this.uploadRepository(mockFile, userId);
+  }
+
 
   async getRepositories(userId: string) {
     return this.prisma.repository.findMany({

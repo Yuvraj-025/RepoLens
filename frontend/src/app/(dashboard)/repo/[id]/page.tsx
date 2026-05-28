@@ -4,11 +4,25 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { getRepositoryDetails, getRepositoryFiles, getRepositoryFile, getRepositorySummary } from '@/lib/api/repository';
 import { getChatHistory, clearChatHistory, queryRepositoryStream } from '@/lib/api/chat';
-import { Folder, FileCode, HardDrive, Cpu, Terminal, Send, ChevronRight, Maximize2, Minimize2, X, Info } from 'lucide-react';
+import Link from 'next/link';
+import { Folder, FileCode, HardDrive, Cpu, Terminal, Send, ChevronRight, Maximize2, Minimize2, X, Info, ArrowLeft, AlertTriangle } from 'lucide-react';
 import Editor from '@monaco-editor/react';
 import StatsSummary from '@/components/insights/StatsSummary';
 import LanguageChart from '@/components/insights/LanguageChart';
 import LargestFilesTable from '@/components/insights/LargestFilesTable';
+import { copyContent } from '@/lib/content';
+
+const formatMarkdown = (text: string) => {
+  if (!text) return '';
+  let escaped = text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+  escaped = escaped.replace(/\*\*([^\s\*](?:[\s\S]*?[^\s\*])?)\*\*/g, '<strong>$1</strong>');
+  escaped = escaped.replace(/\*([^\s\*](?:[\s\S]*?[^\s\*])?)\*/g, '<em>$1</em>');
+  escaped = escaped.replace(/`([^`\s](?:[^`]*?[^`\s])?)`/g, '<code class="px-1.5 py-0.5 font-mono text-[11px] bg-[#0e0d0c]/60 border border-lux-border/60 text-lux-gold rounded">$1</code>');
+  return escaped;
+};
 
 export default function RepositoryDashboard() {
   const params = useParams();
@@ -50,6 +64,8 @@ export default function RepositoryDashboard() {
   const [isSummaryLoading, setIsSummaryLoading] = useState(false);
   const [summaryError, setSummaryError] = useState('');
 
+  const c = copyContent.repoDetails;
+
   const mapLanguageToMonaco = (lang: string) => {
     if (!lang) return 'plaintext';
     const l = lang.toLowerCase();
@@ -69,28 +85,29 @@ export default function RepositoryDashboard() {
     setEditorInstance(editor);
     setMonacoInstance(monaco);
 
-    monaco.editor.defineTheme('retro-hacker', {
+    // Defining the custom luxury code highlighting theme
+    monaco.editor.defineTheme('luxury-dark', {
       base: 'vs-dark',
       inherit: true,
       rules: [
-        { token: '', foreground: '00ff41' },
-        { token: 'comment', foreground: '00aa30', fontStyle: 'italic' },
-        { token: 'keyword', foreground: '00ffff' },
-        { token: 'string', foreground: '00ff88' },
-        { token: 'number', foreground: '00ffc8' },
-        { token: 'regexp', foreground: '00ffc8' },
-        { token: 'type', foreground: '00ffff' },
+        { token: '', foreground: 'faf8f5' },
+        { token: 'comment', foreground: '8a7d6e', fontStyle: 'italic' },
+        { token: 'keyword', foreground: 'ebdcb9' },
+        { token: 'string', foreground: 'c98c6b' },
+        { token: 'number', foreground: 'ebdcb9' },
+        { token: 'regexp', foreground: 'ebdcb9' },
+        { token: 'type', foreground: 'd0c4b2' },
       ],
       colors: {
-        'editor.background': '#020202',
-        'editor.foreground': '#00ff41',
-        'editor.lineHighlightBackground': '#00ff4110',
-        'editorLineNumber.foreground': '#00ff4145',
-        'editorLineNumber.activeForeground': '#00ff41',
-        'editor.selectionBackground': '#00ff4130',
+        'editor.background': '#12100f',
+        'editor.foreground': '#faf8f5',
+        'editor.lineHighlightBackground': '#27221e33',
+        'editorLineNumber.foreground': '#40362f',
+        'editorLineNumber.activeForeground': '#ebdcb9',
+        'editor.selectionBackground': '#ebdcb922',
       }
     });
-    monaco.editor.setTheme('retro-hacker');
+    monaco.editor.setTheme('luxury-dark');
   };
 
   useEffect(() => {
@@ -131,7 +148,12 @@ export default function RepositoryDashboard() {
     setSummaryError('');
     try {
       const data = await getRepositorySummary(id);
-      setSummary(data.summary);
+      const cleaned = (data.summary || '')
+        .replace(/^```markdown\s*/i, '')
+        .replace(/^```\s*/, '')
+        .replace(/\s*```$/, '')
+        .trim();
+      setSummary(cleaned);
     } catch (err: any) {
       setSummaryError(err.message || 'Failed to load summary insights');
     } finally {
@@ -147,6 +169,7 @@ export default function RepositoryDashboard() {
   };
 
   const handleViewFile = async (file: any, range: { startLine: number; endLine: number } | null = null) => {
+    setIsExpandedView(true);
     setIsFileLoading(true);
     setSelectedFile(file);
     setHighlightRange(range);
@@ -188,25 +211,6 @@ export default function RepositoryDashboard() {
     return root;
   }, [files]);
 
-  const renderCodeWithLineNumbers = (code: string) => {
-    if (!code) return <p className="text-retro-green-dim italic p-6 font-mono">&gt; [BINARY FILE OR EMPTY CONTENT]</p>;
-    const lines = code.split('\n');
-    return (
-      <div className="flex font-mono text-sm h-full overflow-y-auto scrollbar-thin select-none">
-        <div className="text-right pr-4 text-retro-green/45 border-r border-retro-green/20 select-none bg-retro-bg/50 sticky left-0 py-2 min-w-[3rem]">
-          {lines.map((_, idx) => (
-            <div key={idx} className="h-6 leading-6">{idx + 1}</div>
-          ))}
-        </div>
-        <div className="pl-4 text-retro-green select-text py-2 overflow-x-auto whitespace-pre leading-6 flex-1">
-          {lines.map((line, idx) => (
-            <div key={idx} className="h-6 hover:bg-retro-green/10 transition-colors whitespace-pre pr-4">{line || ' '}</div>
-          ))}
-        </div>
-      </div>
-    );
-  };
-
   const renderTreeNode = (node: any, level = 0) => {
     const isExpanded = !!expandedFolders[node.path];
     
@@ -215,27 +219,27 @@ export default function RepositoryDashboard() {
       return (
         <div 
           key={node.id} 
-          className={`flex justify-between items-center group p-1.5 cursor-default transition-colors border-b border-retro-green/10 last:border-0 font-mono text-sm ${isSelected ? 'bg-retro-green/20' : 'hover:bg-retro-green/10'}`} 
-          style={{ paddingLeft: `${level * 1.2 + 0.5}rem` }}
+          className={`flex justify-between items-center group py-2 px-3 cursor-default transition-all duration-300 border-b border-lux-border/30 last:border-0 font-mono text-xs ${isSelected ? 'bg-lux-gold/10' : 'hover:bg-lux-card/40'}`} 
+          style={{ paddingLeft: `${level * 1.2 + 0.75}rem` }}
         >
           <div className="flex items-center gap-2 truncate pr-4">
-            <FileCode className={`w-4 h-4 flex-shrink-0 ${isSelected ? 'text-retro-cyan' : 'text-retro-green'}`} />
-            <span className={`truncate text-sm ${isSelected ? 'text-retro-cyan font-bold' : 'text-retro-green'}`} title={node.name}>
+            <FileCode className={`w-3.5 h-3.5 flex-shrink-0 ${isSelected ? 'text-lux-gold' : 'text-lux-creme-dim'}`} />
+            <span className={`truncate text-xs ${isSelected ? 'text-lux-gold font-bold' : 'text-lux-creme'}`} title={node.name}>
               {node.name}
             </span>
           </div>
-          <div className="text-xs text-retro-green-dim flex-shrink-0 flex items-center gap-3">
+          <div className="text-[10px] text-lux-creme-dim flex-shrink-0 flex items-center gap-3 font-mono">
             <span className="w-12 truncate text-right hidden sm:inline">{node.language}</span>
             <span className="w-16 text-right hidden md:inline">{formatSize(node.sizeBytes)}</span>
             <button 
               onClick={() => handleViewFile(node)}
-              className={`px-2 py-0.5 border text-xs uppercase transition-colors font-semibold ${
+              className={`px-2 py-0.5 border text-[9px] uppercase tracking-wider transition-colors font-semibold font-mono ${
                 isSelected 
-                  ? 'border-retro-cyan text-retro-bg bg-retro-cyan hover:bg-transparent hover:text-retro-cyan' 
-                  : 'border-retro-green text-retro-green hover:bg-retro-green hover:text-retro-bg'
+                  ? 'border-lux-gold text-lux-bg bg-lux-gold hover:bg-transparent hover:text-lux-gold' 
+                  : 'border-lux-border text-lux-creme-dim hover:border-lux-gold hover:text-lux-gold'
               }`}
             >
-              View()
+              {c.viewButton}
             </button>
           </div>
         </div>
@@ -254,13 +258,13 @@ export default function RepositoryDashboard() {
       <div key={node.path}>
         <div 
           onClick={() => toggleFolder(node.path)}
-          className="flex items-center gap-2 hover:bg-retro-green/5 p-1.5 cursor-pointer border-b border-retro-green/10 last:border-0 font-mono text-sm" 
-          style={{ paddingLeft: `${level * 1.2 + 0.5}rem` }}
+          className="flex items-center gap-2 hover:bg-lux-card/30 py-2 px-3 cursor-pointer border-b border-lux-border/30 last:border-0 font-mono text-xs" 
+          style={{ paddingLeft: `${level * 1.2 + 0.75}rem` }}
         >
-          <ChevronRight className={`w-3 h-3 text-retro-green-dim transition-transform ${isExpanded ? 'rotate-90' : ''}`} />
-          <Folder className="w-4 h-4 text-retro-cyan flex-shrink-0" />
-          <span className="font-semibold text-retro-cyan truncate">{node.name}</span>
-          <span className="text-xs text-retro-green-dim ml-auto hidden sm:inline">({childrenKeys.length})</span>
+          <ChevronRight className={`w-3.5 h-3.5 text-lux-creme-dim transition-transform duration-300 ${isExpanded ? 'rotate-90 text-lux-gold' : ''}`} />
+          <Folder className="w-3.5 h-3.5 text-lux-gold flex-shrink-0" />
+          <span className="font-semibold text-lux-creme truncate">{node.name}</span>
+          <span className="text-[9px] text-lux-creme-dim ml-auto hidden sm:inline">({childrenKeys.length})</span>
         </div>
         {isExpanded && childrenKeys.map(key => renderTreeNode(node.children[key], level + 1))}
       </div>
@@ -289,7 +293,7 @@ export default function RepositoryDashboard() {
         
         if (transformed.length === 0) {
           setChatMessages([
-            { role: 'assistant', content: 'INITIALIZING AI LINK... READY. AWAITING QUERY.' }
+            { role: 'assistant', content: 'Index mapping completed. Ready for query analysis.' }
           ]);
         } else {
           setChatMessages(transformed);
@@ -309,11 +313,11 @@ export default function RepositoryDashboard() {
   }, [id, router]);
 
   const handleClearHistory = async () => {
-    if (!confirm('Are you sure you want to clear the chat log?')) return;
+    if (!confirm(c.confirmClearPrompt)) return;
     try {
       await clearChatHistory(id);
       setChatMessages([
-        { role: 'assistant', content: 'CHAT LOGS PURGED. AWAITING QUERY.' }
+        { role: 'assistant', content: c.clearSuccessContent }
       ]);
     } catch (err: any) {
       alert(`Failed to clear chat log: ${err.message}`);
@@ -363,7 +367,7 @@ export default function RepositoryDashboard() {
     setChatMessages(prev => [
       ...prev,
       { role: 'user', content: userQuery },
-      { role: 'assistant', content: 'RETRIEVING CONTEXT...' }
+      { role: 'assistant', content: 'Locating context chunks...' }
     ]);
 
     try {
@@ -382,7 +386,7 @@ export default function RepositoryDashboard() {
             return updated;
           });
         } else if (msg.type === 'content') {
-          if (currentContent === '' || currentContent === 'RETRIEVING CONTEXT...') {
+          if (currentContent === '' || currentContent === 'Locating context chunks...') {
             currentContent = msg.content || '';
           } else {
             currentContent += msg.content || '';
@@ -400,7 +404,7 @@ export default function RepositoryDashboard() {
             const updated = [...prev];
             const last = updated[updated.length - 1];
             if (last) {
-              last.content = `[ERROR: ${msg.message || 'Stream disrupted'}]`;
+              last.content = `[Stream Disrupted: ${msg.message || 'Error occurred'}]`;
             }
             return updated;
           });
@@ -411,7 +415,7 @@ export default function RepositoryDashboard() {
         const updated = [...prev];
         const last = updated[updated.length - 1];
         if (last) {
-          last.content = `[CONNECTION ERROR: ${err.message || 'Failed to contact AI server'}]`;
+          last.content = `[Connection Error: ${err.message || 'Failed to stream response'}]`;
         }
         return updated;
       });
@@ -423,16 +427,16 @@ export default function RepositoryDashboard() {
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-full">
-        <p className="text-2xl animate-pulse text-retro-green">&gt; FETCHING REPOSITORY DATA...</p>
+        <span className="text-lux-gold animate-pulse text-xs tracking-widest uppercase">&gt; {c.loadingIndex}</span>
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="border-2 border-red-500 bg-red-500/10 p-6 max-w-2xl mx-auto mt-12">
-        <h2 className="text-2xl text-red-500 mb-2">&gt; ERROR_ENCOUNTERED</h2>
-        <p className="text-red-400">{error}</p>
+      <div className="border border-lux-copper bg-lux-copper/5 p-6 max-w-2xl mx-auto mt-12 space-y-3 font-mono text-xs">
+        <h2 className="text-sm font-serif font-light text-lux-copper uppercase">&gt; {c.errorHeader}</h2>
+        <p className="text-lux-creme-dim">{error}</p>
       </div>
     );
   }
@@ -444,72 +448,86 @@ export default function RepositoryDashboard() {
   };
 
   return (
-    <div className="flex flex-col h-[calc(100vh-8rem)] max-w-7xl mx-auto space-y-6">
+    <div className="flex flex-col h-[calc(100vh-10.5rem)] w-full max-w-[1800px] mx-auto space-y-6 animate-reveal-up">
       
       {/* Header Panel */}
-      <div className="border-2 border-retro-cyan p-6 bg-retro-cyan/5 flex flex-col md:flex-row justify-between items-start md:items-center shadow-retro shadow-retro-cyan gap-4">
-        <div>
-          <h1 className="text-3xl uppercase tracking-wider text-retro-cyan flex items-center gap-2">
-            <HardDrive className="w-8 h-8" /> 
-            {repo.name}
-            <button
-              onClick={handleOpenInsights}
-              className="p-1.5 text-retro-cyan hover:text-white hover:bg-retro-cyan/20 border border-retro-cyan/30 hover:border-retro-cyan rounded transition-colors ml-2 flex items-center justify-center"
-              title="Show System Insights"
-            >
-              <Info className="w-5 h-5" />
-            </button>
-          </h1>
-          <p className="text-retro-green-dim mt-2 flex items-center gap-2">
-            <span>STATUS: [{repo.status.toUpperCase()}]</span>
-            <span className="text-retro-cyan/50">|</span>
-            <span>FILES: {repo.fileCount}</span>
-            <span className="text-retro-cyan/50">|</span>
-            <span>CHUNKS: {repo.chunkCount}</span>
-          </p>
+      <div className="border border-lux-border p-6 bg-lux-card/15 backdrop-blur-md flex flex-col md:flex-row justify-between items-start md:items-center shadow-lux gap-6">
+        <div className="flex items-start gap-4">
+          <Link
+            href="/dashboard"
+            className="p-2 border border-lux-border text-lux-creme-dim hover:text-lux-gold hover:border-lux-gold transition-colors duration-300 flex items-center justify-center mt-1"
+            title="Return to Repository Index"
+          >
+            <ArrowLeft className="w-4 h-4" />
+          </Link>
+          <div>
+            <h1 className="text-2xl font-serif font-light tracking-widest text-lux-creme flex items-center gap-3 uppercase">
+              <HardDrive className="w-6 h-6 text-lux-gold" /> 
+              {repo.name}
+              <button
+                onClick={handleOpenInsights}
+                className="p-1.5 text-lux-gold hover:text-lux-creme hover:bg-lux-card border border-lux-border hover:border-lux-gold transition-all duration-300 flex items-center justify-center ml-2"
+                title="Show System Insights"
+              >
+                <Info className="w-4 h-4" />
+              </button>
+            </h1>
+            <p className="text-[10px] font-mono tracking-widest text-lux-creme-dim mt-2 flex flex-wrap items-center gap-3 uppercase">
+              <span>{c.statusLabel} [{repo.status.toUpperCase()}]</span>
+              <span className="opacity-35">/</span>
+              <span>{c.filesCountLabel} {repo.fileCount}</span>
+              <span className="opacity-35">/</span>
+              <span>{c.chunksCountLabel} {repo.chunkCount}</span>
+            </p>
+          </div>
         </div>
-        <div className="text-right flex items-center gap-4 border-l-2 border-retro-cyan/30 pl-4">
-          <Cpu className="w-12 h-12 text-retro-cyan opacity-50" />
-          <div className="text-sm text-retro-green-dim space-y-1">
-            <p>LANG: {repo.primaryLanguage || 'UNKNOWN'}</p>
-            <p>ID: {repo.id.split('-')[0]}...</p>
+        <div className="text-right flex items-center gap-4 border-l border-lux-border pl-6">
+          <Cpu className="w-10 h-10 text-lux-gold opacity-60" />
+          <div className="text-[10px] font-mono text-lux-creme-dim space-y-1 text-left uppercase tracking-wider">
+            <p>{c.langLabel} {repo.primaryLanguage || 'UNKNOWN'}</p>
+            <p className="opacity-60">ID: {repo.id.split('-')[0]}...</p>
           </div>
         </div>
       </div>
 
+      {/* Main Split Area */}
       <div className="flex-1 flex flex-col md:flex-row gap-6 min-h-0">
         
         {/* File Explorer Panel */}
-        <div className={`md:w-1/3 border-2 border-retro-green flex flex-col h-full bg-retro-bg overflow-hidden shadow-[4px_4px_0_0_#00ff41] ${isChatFullscreen ? 'hidden' : 'flex'}`}>
-          <div className="border-b-2 border-retro-green p-3 bg-retro-green/20 flex justify-between items-center">
+        <div className={`md:w-1/3 border border-lux-border flex flex-col h-full bg-lux-card/15 backdrop-blur-md shadow-lux ${isChatFullscreen ? 'hidden' : 'flex'}`}>
+          <div className="border-b border-lux-border p-4 bg-lux-card/45 flex justify-between items-center">
             <div className="flex items-center gap-2">
-              <Folder className="w-5 h-5" />
-              <h2 className="uppercase tracking-widest text-lg">SYS.TREE()</h2>
+              <Folder className="w-4 h-4 text-lux-gold" />
+              <h2 className="uppercase tracking-widest text-xs font-mono font-bold text-lux-creme">{c.explorerTreeTitle}</h2>
             </div>
             <button 
               onClick={() => setIsExpandedView(true)}
-              className="p-1 border border-retro-green text-retro-green hover:bg-retro-green hover:text-retro-bg transition-colors"
+              className="p-1.5 border border-lux-border text-lux-creme-dim hover:text-lux-gold hover:border-lux-gold transition-colors duration-300"
               title="Expand Workspace"
             >
-              <Maximize2 className="w-4 h-4" />
+              <Maximize2 className="w-3.5 h-3.5" />
             </button>
           </div>
           
-          <div className="flex-1 overflow-y-auto p-4 space-y-1 scrollbar-thin scrollbar-thumb-retro-green scrollbar-track-transparent">
+          <div className="flex-1 overflow-y-auto p-2 space-y-0.5 scrollbar-thin">
             {files.length === 0 ? (
-              <p className="text-retro-green-dim italic">&gt; NO FILES DETECTED</p>
+              <p className="text-[10px] font-mono text-lux-creme-dim italic p-4">{c.allFilesOffline}</p>
             ) : (
               files.map(file => (
-                <div key={file.id} className="flex justify-between items-center group hover:bg-retro-green/10 p-1 cursor-default transition-colors border-b border-retro-green/20 last:border-0">
+                <div key={file.id} className="flex justify-between items-center group hover:bg-lux-card/30 p-2 cursor-default transition-all duration-300 border-b border-lux-border/30 last:border-0 font-mono text-xs">
                   <div className="flex items-center gap-2 truncate pr-4">
-                    <ChevronRight className="w-3 h-3 text-retro-green-dim opacity-0 group-hover:opacity-100 transition-opacity" />
-                    <FileCode className="w-4 h-4 text-retro-green flex-shrink-0" />
-                    <span className="truncate text-sm font-mono" title={file.filePath}>{file.filePath}</span>
+                    <ChevronRight className="w-3 h-3 text-lux-gold opacity-0 group-hover:opacity-100 transition-opacity" />
+                    <FileCode className="w-3.5 h-3.5 text-lux-creme-dim flex-shrink-0" />
+                    <span className="truncate text-xs font-mono text-lux-creme" title={file.filePath}>{file.filePath}</span>
                   </div>
-                  <div className="text-xs text-retro-green-dim flex-shrink-0 flex gap-3 font-mono">
-                    <span className="w-12 truncate text-right">{file.language}</span>
-                    <span className="w-20 text-right">{file.modifiedAt ? new Date(file.modifiedAt).toLocaleDateString() : '--/--/----'}</span>
-                    <span className="w-16 text-right">{formatSize(file.sizeBytes)}</span>
+                  <div className="text-[9px] text-lux-creme-dim flex-shrink-0 flex gap-3 font-mono uppercase tracking-wider items-center">
+                    <span className="w-12 truncate text-right hidden lg:inline">{file.language}</span>
+                    <button 
+                      onClick={() => handleViewFile(file)}
+                      className="px-2 py-0.5 border border-lux-border hover:border-lux-gold text-lux-creme-dim hover:text-lux-gold text-[9px] transition-colors"
+                    >
+                      {c.viewButton}
+                    </button>
                   </div>
                 </div>
               ))
@@ -520,59 +538,68 @@ export default function RepositoryDashboard() {
         {/* Chat Panel */}
         <div className={`flex flex-col overflow-hidden ${
           isChatFullscreen 
-            ? 'fixed inset-0 z-50 p-4 md:p-6 bg-retro-bg/95 backdrop-blur-sm' 
-            : 'md:w-2/3 border-2 border-retro-green shadow-[4px_4px_0_0_#00ff41] relative h-full'
+            ? 'fixed inset-0 z-50 p-6 bg-lux-bg/95 backdrop-blur-md' 
+            : 'md:w-2/3 border border-lux-border shadow-lux relative h-full'
         }`}>
-          <div className={`flex-1 flex flex-col min-h-0 bg-retro-bg relative ${
+          <div className={`flex-1 flex flex-col min-h-0 bg-lux-card/10 relative ${
             isChatFullscreen 
-              ? 'border-2 border-retro-green shadow-retro shadow-retro-green' 
+              ? 'border border-lux-border bg-lux-card shadow-lux' 
               : ''
           }`}>
-            {/* CRT Scanline overlay just for this panel */}
-            <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(rgba(18,16,16,0)_50%,rgba(0,0,0,0.25)_50%),linear-gradient(90deg,rgba(255,0,0,0.06),rgba(0,255,0,0.02),rgba(0,0,255,0.06))] bg-[length:100%_4px,3px_100%] z-10 opacity-20" />
             
-            <div className="border-b-2 border-retro-green p-3 bg-retro-green/20 flex items-center justify-between z-20">
+            {/* Header controls */}
+            <div className="border-b border-lux-border p-4 bg-lux-card/45 flex items-center justify-between z-20">
               <div className="flex items-center gap-2">
-                <Terminal className="w-5 h-5" />
-                <h2 className="uppercase tracking-widest text-lg">AI_LINK_ESTABLISHED</h2>
+                <Terminal className="w-4 h-4 text-lux-gold" />
+                <h2 className="uppercase tracking-widest text-xs font-mono font-bold text-lux-creme">{c.chatHeaderTitle}</h2>
               </div>
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-3 font-mono text-[9px]">
                 <button 
                   onClick={handleSaveChat}
-                  disabled={chatMessages.length === 0 || (chatMessages.length === 1 && chatMessages[0].content.includes('INITIALIZING AI LINK'))}
-                  className="px-2 py-0.5 border border-retro-cyan text-retro-cyan hover:bg-retro-cyan hover:text-retro-bg disabled:opacity-40 disabled:cursor-not-allowed text-xs uppercase font-bold"
+                  disabled={chatMessages.length === 0 || (chatMessages.length === 1 && chatMessages[0].content.includes('Index mapping completed'))}
+                  className="px-2.5 py-1 border border-emerald-500/30 text-emerald-400 hover:bg-emerald-500 hover:text-lux-bg disabled:opacity-40 disabled:cursor-not-allowed font-bold uppercase transition-colors"
                 >
-                  SAVE_CHAT()
+                  {c.saveChatButton}
                 </button>
                 <button 
                   onClick={handleClearHistory}
-                  className="px-2 py-0.5 border border-retro-green text-retro-green hover:bg-retro-green hover:text-retro-bg text-xs uppercase font-bold"
+                  className="px-2.5 py-1 border border-red-500/30 text-red-400 font-bold uppercase transition-colors"
                 >
-                  CLEAR_LOGS()
+                  {c.clearLogsButton}
                 </button>
                 <button
                   type="button"
                   onClick={() => setIsChatFullscreen(!isChatFullscreen)}
-                  className="p-1 border border-retro-green text-retro-green hover:bg-retro-green hover:text-retro-bg transition-colors"
+                  className="p-1 border border-lux-border text-lux-creme-dim hover:text-lux-gold hover:border-lux-gold transition-colors"
                   title={isChatFullscreen ? "Exit Fullscreen" : "Fullscreen Chat"}
                 >
-                  {isChatFullscreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
+                  {isChatFullscreen ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
                 </button>
               </div>
             </div>
             
-            <div className="flex-1 overflow-y-auto p-6 space-y-6 flex flex-col font-mono">
+            {/* Chat Messages */}
+            <div className="flex-1 overflow-y-auto p-6 space-y-6 flex flex-col font-mono text-xs scrollbar-thin">
               {chatMessages.map((msg, i) => (
                 <div key={i} className={`flex flex-col max-w-[85%] ${msg.role === 'user' ? 'self-end items-end' : 'self-start'}`}>
-                  <span className="text-xs text-retro-green-dim mb-1 uppercase tracking-wider">
-                    {msg.role === 'user' ? 'USER_INPUT' : 'SYS_RESPONSE'}
+                  <span className="text-[9px] text-lux-creme-dim mb-1.5 uppercase tracking-widest font-bold">
+                    {msg.role === 'user' ? c.userRoleLabel : c.systemRoleLabel}
                   </span>
-                  <div className={`p-4 border-2 ${msg.role === 'user' ? 'border-retro-cyan bg-retro-cyan/10 text-white' : 'border-retro-green bg-retro-green/5 text-gray-100'}`}>
-                    <p className="whitespace-pre-wrap">{msg.content}</p>
+                  <div 
+                    className={`p-4 border text-xs leading-relaxed ${
+                      msg.role === 'user' 
+                        ? 'border-lux-gold/30 bg-lux-gold/5 text-lux-creme' 
+                        : 'border-lux-border bg-lux-card text-lux-creme'
+                    }`}
+                  >
+                    <div 
+                      className="whitespace-pre-wrap"
+                      dangerouslySetInnerHTML={{ __html: formatMarkdown(msg.content) }}
+                    />
                     
                     {msg.sources && msg.sources.length > 0 && (
-                      <div className="mt-3 pt-3 border-t border-retro-green/20 text-xs">
-                        <span className="text-retro-green-dim font-bold uppercase tracking-wider block mb-1">RETRIEVED_SOURCES:</span>
+                      <div className="mt-4 pt-3 border-t border-lux-border/50 text-[10px]">
+                        <span className="text-lux-gold font-bold uppercase tracking-wider block mb-2 font-mono text-[9px]">{c.citationsLabel}</span>
                         <div className="flex flex-wrap gap-2">
                           {msg.sources.map((src, idx) => (
                             <button
@@ -583,11 +610,11 @@ export default function RepositoryDashboard() {
                                   setIsExpandedView(true);
                                   handleViewFile(file, { startLine: src.startLine, endLine: src.endLine });
                                 } else {
-                                  alert(`File ${src.filePath} not found in repository files.`);
+                                  alert(`File ${src.filePath} not found in catalog archives.`);
                                 }
                               }}
                               title={src.filePath}
-                              className="px-2 py-1 border border-retro-green/45 hover:border-retro-cyan hover:text-retro-cyan bg-retro-green/10 text-retro-green transition-colors font-mono text-[11px]"
+                              className="px-2.5 py-1 border border-lux-border hover:border-lux-gold text-lux-creme-dim hover:text-lux-gold transition-colors font-mono text-[9px] bg-lux-bg/20"
                             >
                               {src.filePath.split('/').pop()} (L{src.startLine}-{src.endLine})
                             </button>
@@ -601,25 +628,37 @@ export default function RepositoryDashboard() {
               <div ref={chatEndRef} />
             </div>
 
-            <div className="border-t-2 border-retro-green p-4 bg-retro-bg z-20">
-              <form onSubmit={handleSendMessage} className="flex gap-4 items-center">
-                <span className="text-xl text-retro-green font-bold animate-pulse">&gt;</span>
-                <input
-                  type="text"
-                  value={chatInput}
-                  onChange={(e) => setChatInput(e.target.value)}
-                  placeholder={isSending ? "AI is generating response..." : "Query the codebase..."}
-                  disabled={isSending}
-                  className="flex-1 bg-transparent border-b-2 border-retro-green/50 focus:border-retro-green text-retro-green placeholder:text-retro-green/30 px-2 py-2 outline-none font-mono"
-                />
-                <button 
-                  type="submit" 
-                  disabled={!chatInput.trim() || isSending}
-                  className="p-3 border-2 border-retro-green text-retro-green hover:bg-retro-green hover:text-retro-bg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  <Send className="w-5 h-5" />
-                </button>
-              </form>
+            {/* Input Form */}
+            <div className="border-t border-lux-border p-4 bg-lux-card/25 backdrop-blur-md z-20">
+              {repo?.status === 'error' || repo?.chunkCount === 0 ? (
+                <div className="flex items-center justify-center gap-2 py-2 text-lux-copper font-mono text-xs border border-dashed border-lux-copper/35 bg-lux-copper/5 rounded">
+                  <AlertTriangle className="w-4 h-4 flex-shrink-0" />
+                  <span>
+                    {repo?.chunkCount > 0 
+                      ? "Can't use on RAG, embedding failed" 
+                      : "Uploaded but can't chunk into RAG, chat option not available"}
+                  </span>
+                </div>
+              ) : (
+                <form onSubmit={handleSendMessage} className="flex gap-4 items-center">
+                  <span className="text-sm text-lux-gold font-bold animate-pulse font-mono">&gt;</span>
+                  <input
+                    type="text"
+                    value={chatInput}
+                    onChange={(e) => setChatInput(e.target.value)}
+                    placeholder={isSending ? c.chatLoadingPlaceholder : c.chatPlaceholder}
+                    disabled={isSending}
+                    className="flex-1 bg-transparent border-b border-lux-border/60 focus:border-lux-gold/50 text-lux-creme placeholder:text-lux-creme-dim/30 px-2 py-2 outline-none font-mono text-xs"
+                  />
+                  <button 
+                    type="submit" 
+                    disabled={!chatInput.trim() || isSending}
+                    className="p-3 border border-lux-border text-lux-creme-dim hover:text-lux-gold hover:border-lux-gold transition-colors disabled:opacity-40"
+                  >
+                    <Send className="w-4 h-4" />
+                  </button>
+                </form>
+              )}
             </div>
           </div>
         </div>
@@ -628,13 +667,13 @@ export default function RepositoryDashboard() {
 
       {/* Fullscreen Workspace Modal */}
       {isExpandedView && (
-        <div className="fixed inset-0 z-50 bg-retro-bg/95 backdrop-blur-sm p-4 md:p-6 flex flex-col font-mono">
+        <div className="fixed inset-0 z-50 bg-lux-bg/95 backdrop-blur-md p-6 flex flex-col">
           {/* Modal Header */}
-          <div className="border-2 border-retro-green bg-retro-bg/90 p-4 mb-4 flex justify-between items-center shadow-retro shadow-retro-green">
+          <div className="border border-lux-border bg-lux-card p-4 mb-6 flex justify-between items-center shadow-lux animate-reveal-up">
             <div className="flex items-center gap-3">
-              <Terminal className="text-retro-green w-6 h-6 animate-pulse" />
-              <h2 className="text-xl md:text-2xl uppercase tracking-widest text-retro-green font-bold">
-                WORKSPACE_EXPLORER_V1.0 // {repo.name}
+              <Terminal className="text-lux-gold w-5 h-5 animate-pulse" />
+              <h2 className="text-sm font-serif font-light tracking-widest text-lux-creme uppercase">
+                {c.workspaceTitle} // {repo.name}
               </h2>
             </div>
             <button 
@@ -643,21 +682,21 @@ export default function RepositoryDashboard() {
                 setSelectedFile(null);
                 setSelectedFileContent('');
               }}
-              className="p-2 border-2 border-retro-green text-retro-green hover:bg-retro-green hover:text-retro-bg transition-colors"
-              title="Exit workspace explorer"
+              className="p-2 border border-lux-border text-lux-creme-dim hover:text-lux-creme hover:border-lux-creme transition-colors duration-300"
+              title="Exit Workspace"
             >
-              <X className="w-6 h-6" />
+              <X className="w-5 h-5" />
             </button>
           </div>
 
           {/* Modal Content - Split View */}
-          <div className="flex-1 flex flex-col md:flex-row gap-6 min-h-0">
+          <div className="flex-1 flex flex-col md:flex-row gap-6 min-h-0 animate-reveal-up delay-100">
             {/* Left Column: Folder Tree Explorer */}
-            <div className="flex-1 md:flex-[0.35] border-2 border-retro-green flex flex-col bg-retro-bg overflow-hidden shadow-retro shadow-retro-green">
-              <div className="border-b-2 border-retro-green p-3 bg-retro-green/20 flex justify-between items-center">
+            <div className="flex-1 md:flex-[0.3] border border-lux-border flex flex-col bg-lux-card/15 overflow-hidden">
+              <div className="border-b border-lux-border p-4 bg-lux-card/45 flex justify-between items-center">
                 <div className="flex items-center gap-2">
-                  <Folder className="w-5 h-5 text-retro-green" />
-                  <span className="uppercase tracking-widest text-base font-bold text-retro-green">FILE_HIERARCHY</span>
+                  <Folder className="w-4 h-4 text-lux-gold" />
+                  <span className="text-[10px] font-mono tracking-widest text-lux-creme font-bold uppercase">{c.workspaceFileHierarchy}</span>
                 </div>
                 <button 
                   onClick={() => {
@@ -671,15 +710,15 @@ export default function RepositoryDashboard() {
                     expandAll(fileTree);
                     setExpandedFolders(allExpanded);
                   }}
-                  className="px-2 py-0.5 border border-retro-green text-retro-green hover:bg-retro-green hover:text-retro-bg text-xs uppercase"
+                  className="px-2 py-0.5 border border-lux-border text-[9px] font-mono text-lux-creme-dim hover:text-lux-gold hover:border-lux-gold uppercase transition-colors"
                 >
-                  EXPAND_ALL
+                  {c.workspaceExpandAll}
                 </button>
               </div>
               
-              <div className="flex-1 overflow-y-auto p-4 space-y-1 scrollbar-thin scrollbar-thumb-retro-green scrollbar-track-transparent">
+              <div className="flex-1 overflow-y-auto p-2 space-y-0.5 scrollbar-thin">
                 {Object.keys(fileTree.children).length === 0 ? (
-                  <p className="text-retro-green-dim italic">&gt; NO FILES DETECTED</p>
+                  <p className="text-[10px] font-mono text-lux-creme-dim italic p-4">&gt; {c.allFilesOffline}</p>
                 ) : (
                   Object.keys(fileTree.children).sort((a, b) => {
                     const childA = fileTree.children[a];
@@ -693,27 +732,27 @@ export default function RepositoryDashboard() {
             </div>
 
             {/* Right Column: Code Viewer */}
-            <div className="flex-1 md:flex-[0.65] border-2 border-retro-green flex flex-col bg-retro-bg overflow-hidden shadow-retro shadow-retro-green">
-              <div className="border-b-2 border-retro-green p-3 bg-retro-green/20 flex justify-between items-center">
+            <div className="flex-1 md:flex-[0.7] border border-lux-border flex flex-col bg-lux-card/15 overflow-hidden">
+              <div className="border-b border-lux-border p-4 bg-lux-card/45 flex justify-between items-center">
                 <div className="flex items-center gap-2 truncate pr-4">
-                  <FileCode className="w-5 h-5 text-retro-green flex-shrink-0" />
-                  <span className="uppercase tracking-widest text-base font-bold text-retro-cyan truncate">
-                    {selectedFile ? selectedFile.filePath : 'LIVE_VIEWER_OFFLINE'}
+                  <FileCode className="w-4 h-4 text-lux-gold flex-shrink-0" />
+                  <span className="text-[10px] font-mono tracking-widest text-lux-creme truncate uppercase font-bold">
+                    {selectedFile ? selectedFile.filePath : c.workspaceViewerOffline}
                   </span>
                 </div>
                 {selectedFile && (
-                  <div className="text-xs text-retro-green-dim flex-shrink-0 flex gap-4">
-                    <span>LANG: {selectedFile.language?.toUpperCase()}</span>
-                    <span>SIZE: {formatSize(selectedFile.sizeBytes)}</span>
+                  <div className="text-[9px] font-mono text-lux-creme-dim flex-shrink-0 flex gap-4 uppercase tracking-wider">
+                    <span>Lang: {selectedFile.language}</span>
+                    <span>Size: {formatSize(selectedFile.sizeBytes)}</span>
                   </div>
                 )}
               </div>
 
-              <div className="flex-1 bg-[#020202] relative overflow-hidden">
+              <div className="flex-1 bg-[#12100f] relative overflow-hidden">
                 {isFileLoading ? (
-                  <div className="absolute inset-0 flex flex-col items-center justify-center bg-retro-bg/90 z-20">
-                    <div className="w-12 h-12 border-4 border-retro-green border-t-transparent animate-spin mb-4" />
-                    <p className="text-retro-green animate-pulse">&gt; STREAMING_FILE_DATA...</p>
+                  <div className="absolute inset-0 flex flex-col items-center justify-center bg-lux-bg/90 z-20 space-y-3">
+                    <div className="w-8 h-8 border-2 border-lux-gold border-t-transparent animate-spin" />
+                    <p className="text-lux-gold animate-pulse text-[10px] font-mono uppercase tracking-widest">&gt; {c.workspaceStreamingFile}</p>
                   </div>
                 ) : selectedFile ? (
                   <div className="h-full overflow-hidden">
@@ -721,32 +760,33 @@ export default function RepositoryDashboard() {
                       height="100%"
                       language={mapLanguageToMonaco(selectedFile.language)}
                       value={selectedFileContent}
-                      theme="retro-hacker"
+                      theme="luxury-dark"
                       onMount={handleEditorDidMount}
                       options={{
                         readOnly: true,
                         minimap: { enabled: false },
                         automaticLayout: true,
-                        fontSize: 14,
-                        fontFamily: '"VT323", "Courier New", monospace',
+                        fontSize: 13,
+                        fontFamily: '"var(--font-courier)", "Courier New", monospace',
                         lineNumbersMinChars: 3,
                         scrollBeyondLastLine: false,
                         wordWrap: 'on',
                         domReadOnly: true,
+                        lineHeight: 22,
                       }}
                       loading={
-                        <div className="flex flex-col items-center justify-center h-full bg-[#020202]">
-                          <p className="text-retro-green animate-pulse">&gt; INITIALIZING_EDITOR...</p>
+                        <div className="flex flex-col items-center justify-center h-full bg-[#12100f] space-y-3">
+                          <p className="text-lux-gold animate-pulse text-[10px] font-mono uppercase tracking-widest">&gt; {c.workspaceLaunchingEditor}</p>
                         </div>
                       }
                     />
                   </div>
                 ) : (
-                  <div className="flex flex-col items-center justify-center h-full text-retro-green-dim space-y-4 p-8 text-center select-none">
-                    <Terminal className="w-16 h-16 opacity-30 animate-pulse" />
-                    <div>
-                      <p className="text-lg uppercase tracking-wider font-bold text-retro-green">Awaiting Target Selection...</p>
-                      <p className="text-sm opacity-65 mt-2 text-retro-green/70">CLICK [VIEW()] ON ANY FILE FROM THE HIERARCHY TO INITIALIZE DECRYPTION.</p>
+                  <div className="flex flex-col items-center justify-center h-full text-lux-creme-dim space-y-4 p-8 text-center select-none">
+                    <Terminal className="w-12 h-12 opacity-30 animate-pulse text-lux-gold" />
+                    <div className="space-y-1">
+                      <p className="text-xs uppercase tracking-wider font-bold text-lux-creme">{c.workspaceAwaitTarget}</p>
+                      <p className="text-[10px] opacity-60 font-mono uppercase tracking-wider">{c.workspaceAwaitTargetDesc}</p>
                     </div>
                   </div>
                 )}
@@ -758,76 +798,74 @@ export default function RepositoryDashboard() {
 
       {/* Insight Panel Modal */}
       {isInsightOpen && (
-        <div className="fixed inset-0 z-50 bg-retro-bg/95 backdrop-blur-sm p-4 md:p-6 flex flex-col font-mono">
+        <div className="fixed inset-0 z-50 bg-lux-bg/95 backdrop-blur-md p-6 flex flex-col animate-fade-in">
           {/* Modal Header */}
-          <div className="border-2 border-retro-cyan bg-retro-bg/90 p-4 mb-4 flex justify-between items-center shadow-retro shadow-retro-cyan">
+          <div className="border border-lux-gold/30 bg-lux-card p-4 mb-6 flex justify-between items-center shadow-lux animate-reveal-up">
             <div className="flex items-center gap-3">
-              <Info className="text-retro-cyan w-6 h-6 animate-pulse" />
-              <h2 className="text-xl md:text-2xl uppercase tracking-widest text-retro-cyan font-bold">
-                SYSTEM_INSIGHTS_V1.0 // {repo.name}
+              <Info className="text-lux-gold w-5 h-5 animate-pulse" />
+              <h2 className="text-sm font-serif font-light tracking-widest text-lux-creme uppercase">
+                {copyContent.dashboard.insightsTitle} // {repo.name}
               </h2>
             </div>
             <button 
               onClick={() => setIsInsightOpen(false)}
-              className="p-2 border-2 border-retro-cyan text-retro-cyan hover:bg-retro-cyan hover:text-retro-bg transition-colors"
+              className="p-2 border border-lux-border text-lux-creme-dim hover:text-lux-creme hover:border-lux-creme transition-colors duration-300"
               title="Exit insights"
             >
-              <X className="w-6 h-6" />
+              <X className="w-5 h-5" />
             </button>
           </div>
 
           {/* Modal Content */}
-          <div className="flex-1 flex flex-col md:flex-row gap-6 min-h-0 overflow-y-auto">
+          <div className="flex-1 flex flex-col md:flex-row gap-6 min-h-0 overflow-y-auto animate-reveal-up delay-100">
             {/* Left Column: AI Summary */}
-            <div className="flex-1 md:flex-[0.65] border-2 border-retro-green flex flex-col bg-retro-bg overflow-hidden shadow-retro shadow-retro-green">
-              <div className="border-b-2 border-retro-green p-3 bg-retro-green/20">
-                <span className="uppercase tracking-widest text-base font-bold text-retro-green">AI_DECRYPTED_ARCHITECTURE</span>
+            <div className="flex-1 md:flex-[0.65] border border-lux-border flex flex-col bg-lux-card/15 overflow-hidden">
+              <div className="border-b border-lux-border p-4 bg-lux-card/45">
+                <span className="text-[10px] font-mono tracking-widest text-lux-gold uppercase font-bold">{copyContent.dashboard.insightsAiBlueprint}</span>
               </div>
               
-              <div className="flex-1 overflow-y-auto p-6 space-y-4 text-gray-100 scrollbar-thin select-text">
+              <div className="flex-1 overflow-y-auto p-6 space-y-4 text-lux-creme-dim font-mono text-xs select-text">
                 {isSummaryLoading ? (
                   <div className="flex flex-col items-center justify-center h-full space-y-4">
-                    <div className="w-12 h-12 border-4 border-retro-green border-t-transparent animate-spin" />
-                    <p className="text-retro-green animate-pulse">&gt; QUERYING GEMINI INTEL CORE...</p>
-                    <p className="text-xs text-retro-green-dim">&gt; ANALYZING REPO TREE, README, AND DEPENDENCIES...</p>
+                    <div className="w-8 h-8 border-2 border-lux-gold border-t-transparent animate-spin" />
+                    <p className="text-lux-gold animate-pulse text-[10px] uppercase tracking-widest">&gt; {copyContent.dashboard.insightsGeminiLoading}</p>
                   </div>
                 ) : summaryError ? (
-                  <div className="text-red-500 border border-red-500 p-4 bg-red-500/10">
-                    <p className="font-bold">&gt; ERROR_LOADING_SUMMARY</p>
+                  <div className="text-lux-copper border border-lux-copper/30 p-4 bg-lux-copper/5">
+                    <p className="font-bold">&gt; {copyContent.dashboard.insightsDecompileError}</p>
                     <p className="text-sm mt-2">{summaryError}</p>
                   </div>
                 ) : (
-                  <div className="prose prose-invert max-w-none text-retro-green font-mono">
-                    <div className="space-y-6">
-                      {summary.split('# ').map((section: string, idx: number) => {
-                        if (!section.trim()) return null;
-                        const lines = section.split('\n');
-                        const title = lines[0];
-                        const body = lines.slice(1).join('\n');
-                        return (
-                          <div key={idx} className="border border-retro-green/30 p-4 bg-retro-green/5">
-                            <h3 className="text-lg font-bold text-retro-cyan border-b border-retro-cyan/30 pb-1 mb-2 uppercase tracking-wide">
-                              &gt; {title}
-                            </h3>
-                            <div className="whitespace-pre-wrap text-sm leading-relaxed text-retro-green">
-                              {body}
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
+                  <div className="space-y-6">
+                    {summary.split('# ').map((section: string, idx: number) => {
+                      if (!section.trim()) return null;
+                      const lines = section.split('\n');
+                      const title = lines[0];
+                      const body = lines.slice(1).join('\n');
+                      return (
+                        <div key={idx} className="border border-lux-border/60 p-5 bg-lux-bg/40">
+                          <h3 className="text-xs font-serif font-light text-lux-gold border-b border-lux-border/40 pb-2 mb-3 uppercase tracking-widest">
+                            {title}
+                          </h3>
+                          <div 
+                            className="whitespace-pre-wrap text-lux-creme-dim leading-relaxed text-xs"
+                            dangerouslySetInnerHTML={{ __html: formatMarkdown(body) }}
+                          />
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
               </div>
             </div>
 
             {/* Right Column: Codebase Stats */}
-            <div className="flex-1 md:flex-[0.35] border-2 border-retro-cyan flex flex-col bg-retro-bg overflow-hidden shadow-retro shadow-retro-cyan">
-              <div className="border-b-2 border-retro-cyan p-3 bg-retro-cyan/20">
-                <span className="uppercase tracking-widest text-base font-bold text-retro-cyan">METRIC_DIAGNOSTICS</span>
+            <div className="flex-1 md:flex-[0.35] border border-lux-border flex flex-col bg-lux-card/15 overflow-hidden">
+              <div className="border-b border-lux-border p-4 bg-lux-card/45">
+                <span className="text-[10px] font-mono tracking-widest text-lux-gold uppercase font-bold">{copyContent.dashboard.insightsMetrics}</span>
               </div>
 
-              <div className="flex-1 overflow-y-auto p-6 space-y-6 scrollbar-thin text-retro-green">
+              <div className="flex-1 overflow-y-auto p-6 space-y-6 text-lux-creme font-mono text-xs scrollbar-thin">
                 <StatsSummary 
                   fileCount={repo.fileCount} 
                   chunkCount={repo.chunkCount} 
