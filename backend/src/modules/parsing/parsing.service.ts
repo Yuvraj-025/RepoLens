@@ -15,8 +15,8 @@ export class ParsingService {
   ) {
     const lines = content.split('\n');
     const totalLines = lines.length;
-    const chunkSize = 100;
-    const overlap = 15;
+    const chunkSize = 50;
+    const overlap = 10;
     const chunks = [];
 
     if (totalLines <= chunkSize) {
