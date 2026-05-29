@@ -77,14 +77,36 @@ try {
     }
 
     const ext = path.extname(sanitizedPath).toLowerCase();
+    const baseName = path.basename(sanitizedPath).toLowerCase();
+
+    // Whitelist of code extensions and common extensionless filenames
+    const CODE_EXTENSIONS = new Set([
+      '.js', '.jsx', '.ts', '.tsx', '.mjs', '.cjs',
+      '.py', '.pyw',
+      '.go',
+      '.rs',
+      '.c', '.cpp', '.cc', '.cxx', '.h', '.hpp', '.hh',
+      '.java', '.kt', '.kts', '.scala',
+      '.cs', '.fs',
+      '.rb',
+      '.php',
+      '.swift',
+      '.sh', '.bash', '.zsh', '.bat', '.cmd',
+      '.html', '.css', '.scss', '.sass', '.less',
+      '.sql',
+      '.yaml', '.yml', '.toml', '.json', '.xml',
+      '.md', '.markdown'
+    ]);
+
+    const isCodeFile = CODE_EXTENSIONS.has(ext) || ['dockerfile', 'makefile', 'gemfile', 'rakefile', 'procfile', 'pipfile'].includes(baseName);
     const isBinaryOrLock = ['.pdf', '.png', '.jpg', '.jpeg', '.gif', '.mp4', '.zip', '.tar', '.gz', '.ico', '.svg', '.min.js', '.lock'].includes(ext) || sanitizedPath.endsWith('package-lock.json') || sanitizedPath.endsWith('yarn.lock');
     const isTooLarge = entry.header.size > 200 * 1024; // 200KB limit for text content
     
     let content = '';
     let lineCount = 0;
 
-    // Only extract text content if it's a valid text file under the size limit
-    if (!isBinaryOrLock && !isTooLarge && entry.header.size <= 5 * 1024 * 1024) {
+    // Only extract text content if it's a valid code file under the size limit
+    if (isCodeFile && !isBinaryOrLock && !isTooLarge) {
       const rawContent = entry.getData().toString('utf-8');
       if (rawContent.includes('\\0')) {
         content = ''; // Treat as binary
@@ -127,12 +149,17 @@ export class RepositoryService {
     private prisma: PrismaService,
     private parsingService: ParsingService,
     private embeddingService: EmbeddingService,
-  ) {}
+  ) { }
 
   async uploadRepository(file: Express.Multer.File, userId: string) {
+    // Enforce 5MB limit on incoming buffer for backend safety (e.g. GitHub imports)
+    if (file.buffer && file.buffer.length > 5 * 1024 * 1024) {
+      throw new BadRequestException('Repository ZIP file size exceeds the 5MB limit');
+    }
+
     // Truncate repository name to fit VarChar(255) DB column limit
     const repoName = file.originalname.replace('.zip', '').substring(0, 255);
-    
+
     // Spawn worker thread for non-blocking ZIP parsing
     let result: { filesToCreate: any[]; validFileCount: number };
     try {
@@ -161,20 +188,33 @@ export class RepositoryService {
 
     const { filesToCreate, validFileCount } = result;
 
-    // Determine primary language based on bytes
-    const languageCounts: Record<string, number> = {};
+    // Determine primary language based on the single largest code file
+    const PROGRAMMING_LANGUAGES = new Set([
+      'js', 'jsx', 'ts', 'tsx', 'mjs', 'cjs',
+      'py', 'pyw', 'go', 'rs', 'c', 'cpp', 'cc', 'cxx', 'h', 'hpp', 'hh',
+      'java', 'kt', 'kts', 'scala', 'cs', 'fs', 'rb', 'php', 'swift', 'sh', 'sql'
+    ]);
+
+    let primaryLanguage = 'unknown';
+    let maxSizeBytes = -1;
     for (const file of filesToCreate) {
-      if (file.language !== 'binary' && file.language !== 'text') {
-        languageCounts[file.language] = (languageCounts[file.language] || 0) + file.sizeBytes;
+      if (PROGRAMMING_LANGUAGES.has(file.language.toLowerCase())) {
+        if (file.sizeBytes > maxSizeBytes) {
+          maxSizeBytes = file.sizeBytes;
+          primaryLanguage = file.language;
+        }
       }
     }
-    
-    let primaryLanguage = 'unknown';
-    let maxBytes = 0;
-    for (const [lang, bytes] of Object.entries(languageCounts)) {
-      if (bytes > maxBytes) {
-        maxBytes = bytes;
-        primaryLanguage = lang;
+
+    // Fall back to largest non-binary, non-text file if no main programming languages match
+    if (primaryLanguage === 'unknown') {
+      for (const file of filesToCreate) {
+        if (file.language !== 'binary' && file.language !== 'text') {
+          if (file.sizeBytes > maxSizeBytes) {
+            maxSizeBytes = file.sizeBytes;
+            primaryLanguage = file.language;
+          }
+        }
       }
     }
 
@@ -193,49 +233,42 @@ export class RepositoryService {
       }
     });
 
+    // Start background processing asynchronously without blocking the client
+    this.processRepositoryBackground(repository.id).catch((err) => {
+      console.error(`Error starting background processing for repository ${repository.id}:`, err);
+    });
+
+    return { repositoryId: repository.id, status: repository.status };
+  }
+
+  async processRepositoryBackground(repositoryId: string): Promise<void> {
     try {
-      // 1. Chunking
-      const chunks = await this.parsingService.chunkRepositoryFiles(repository.id);
-      if (chunks.length === 0) {
+      // 1. Chunking (which already updates chunkCount incrementally!)
+      const chunkCount = await this.parsingService.chunkRepositoryFiles(repositoryId);
+      if (chunkCount === 0) {
         throw new Error("No code files found to chunk");
       }
 
-      // 2. Embedding
-      try {
-        await this.embeddingService.generateEmbeddingsForRepository(repository.id);
-        
-        // 3. Mark as ready since chunking and embedding succeeded
-        const updated = await this.prisma.repository.update({
-          where: { id: repository.id },
-          data: {
-            status: 'ready',
-            chunkCount: chunks.length
-          }
-        });
-        return { repositoryId: updated.id, status: updated.status };
-      } catch (embError: any) {
-        console.error(`Embedding failed after successful chunking: ${embError.message}`);
-        
-        // Mark as error but set chunkCount since chunking succeeded
-        const updated = await this.prisma.repository.update({
-          where: { id: repository.id },
-          data: {
-            status: 'error',
-            chunkCount: chunks.length
-          }
-        });
-        return { repositoryId: updated.id, status: updated.status };
-      }
-    } catch (error: any) {
-      console.error(`Processing failed (chunking failed): ${error.message}`);
+      // 2. Embedding (which embeds 1 chunk per second!)
+      await this.embeddingService.generateEmbeddingsForRepository(repositoryId);
+
+      // 3. Mark as ready since chunking and embedding succeeded
       await this.prisma.repository.update({
-        where: { id: repository.id },
+        where: { id: repositoryId },
         data: {
-          status: 'error',
-          chunkCount: 0
+          status: 'ready'
+        }
+      });
+    } catch (error: any) {
+      console.error(`Background processing failed for repository ${repositoryId}: ${error.message}`);
+      
+      // Update repository status to error
+      await this.prisma.repository.update({
+        where: { id: repositoryId },
+        data: {
+          status: 'error'
         }
       }).catch(() => {});
-      throw new BadRequestException("Uploaded but can't chunk into RAG, chat option not available");
     }
   }
 
@@ -287,10 +320,26 @@ export class RepositoryService {
 
 
   async getRepositories(userId: string) {
-    return this.prisma.repository.findMany({
+    const repositories = await this.prisma.repository.findMany({
       where: { userId },
       orderBy: { createdAt: 'desc' }
     });
+
+    const result = [];
+    for (const repo of repositories) {
+      if (repo.status === 'processing') {
+        const embeddedCount = await this.prisma.chunk.count({
+          where: { repositoryId: repo.id, isEmbedded: true }
+        });
+        result.push({ ...repo, embeddedCount });
+      } else {
+        result.push({
+          ...repo,
+          embeddedCount: repo.status === 'ready' ? repo.chunkCount : 0
+        });
+      }
+    }
+    return result;
   }
 
   async getRepository(id: string, userId: string) {
@@ -300,7 +349,15 @@ export class RepositoryService {
     if (!repository) {
       throw new NotFoundException('Repository not found');
     }
-    return repository;
+
+    const embeddedCount = await this.prisma.chunk.count({
+      where: { repositoryId: id, isEmbedded: true }
+    });
+
+    return {
+      ...repository,
+      embeddedCount,
+    };
   }
 
   async deleteRepository(id: string, userId: string) {

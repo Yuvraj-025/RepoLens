@@ -145,50 +145,35 @@ export class EmbeddingService {
         repositoryId,
         isEmbedded: false,
       },
-      orderBy: {
-        startLine: 'asc',
-      },
+      orderBy: [
+        { filePath: 'asc' },
+        { startLine: 'asc' }
+      ],
     });
 
     if (chunks.length === 0) {
       return 0;
     }
 
-    const batchSize = 50;
     let successfullyEmbedded = 0;
 
-    for (let i = 0; i < chunks.length; i += batchSize) {
-      const chunkBatch = chunks.slice(i, i + batchSize);
-      const texts = chunkBatch.map(c => c.content);
-
+    for (const chunk of chunks) {
       try {
-        const embeddings = await this.runWithRetry(() => this.getEmbeddingsForBatch(texts));
+        const embedding = await this.runWithRetry(() => this.getQueryEmbedding(chunk.content));
 
-        if (embeddings.length !== chunkBatch.length) {
-          throw new Error(`Size mismatch: requested ${chunkBatch.length} embeddings, received ${embeddings.length}`);
-        }
-
-        // Update chunks in pgvector database concurrently to speed up indexing
-        await Promise.all(
-          chunkBatch.map((chunk, j) => {
-            const embedding = embeddings[j];
-            const vectorStr = `[${embedding.join(',')}]`;
-            return this.prisma.$executeRawUnsafe(
-              `UPDATE "Chunk" SET "embedding" = $1::vector, "isEmbedded" = true WHERE "id" = $2::uuid`,
-              vectorStr,
-              chunk.id
-            );
-          })
+        const vectorStr = `[${embedding.join(',')}]`;
+        await this.prisma.$executeRawUnsafe(
+          `UPDATE "Chunk" SET "embedding" = $1::vector, "isEmbedded" = true WHERE "id" = $2::uuid`,
+          vectorStr,
+          chunk.id
         );
 
+        successfullyEmbedded++;
 
-        successfullyEmbedded += chunkBatch.length;
-
-        // Introduce a small 200ms delay between successful batches to respect API limits
-        await this.delay(200);
+        // Slow down processing: wait 1 second (1000ms) between chunk embeddings
+        await this.delay(1000);
       } catch (error: any) {
-        this.logger.error(`Failed to process embedding batch starting at index ${i}: ${error.message}`);
-        // Bubble up error to fail the ingestion transaction/workflow
+        this.logger.error(`Failed to process embedding for chunk ${chunk.id}: ${error.message}`);
         throw error;
       }
     }

@@ -98,7 +98,7 @@ export const copyContent = {
     modalUploadSubtitle: 'Import code to database',
     dropzoneText: 'Click to select ZIP Archive',
     dropzoneLoading: 'Uploading ZIP Archive...',
-    dropzoneSizeNote: '(Maximum file size: 50MB)',
+    dropzoneSizeNote: '(Maximum file size: 5MB)',
     githubLabel: 'Import from GitHub Repository',
     githubPlaceholder: 'https://github.com/owner/repo',
     githubImportButton: 'Import',

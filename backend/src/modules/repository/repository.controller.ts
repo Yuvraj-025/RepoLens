@@ -25,7 +25,7 @@ export class RepositoryController {
     @UploadedFile(
       new ParseFilePipe({
         validators: [
-          new MaxFileSizeValidator({ maxSize: 50 * 1024 * 1024 }), // 50MB
+          new MaxFileSizeValidator({ maxSize: 5 * 1024 * 1024 }), // 5MB
           new FileTypeValidator({ fileType: 'application/zip' }),
         ],
       }),

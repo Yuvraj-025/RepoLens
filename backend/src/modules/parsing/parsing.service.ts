@@ -4,7 +4,7 @@ import { randomUUID } from 'crypto';
 
 @Injectable()
 export class ParsingService {
-  constructor(private prisma: PrismaService) {}
+  constructor(private prisma: PrismaService) { }
 
   chunkFile(
     fileId: string,
@@ -15,8 +15,8 @@ export class ParsingService {
   ) {
     const lines = content.split('\n');
     const totalLines = lines.length;
-    const chunkSize = 60;
-    const overlap = 10;
+    const chunkSize = 100;
+    const overlap = 15;
     const chunks = [];
 
     if (totalLines <= chunkSize) {
@@ -50,9 +50,9 @@ export class ParsingService {
         content: chunkContent,
         isEmbedded: false,
       });
-      
+
       start += (chunkSize - overlap);
-      
+
       if (start >= totalLines - overlap && end === totalLines) {
         break;
       }
@@ -60,8 +60,8 @@ export class ParsingService {
     return chunks;
   }
 
-  async chunkRepositoryFiles(repositoryId: string) {
-    // Get all files for the repository that have text content
+  async chunkRepositoryFiles(repositoryId: string): Promise<number> {
+    // Get all files for the repository that have text content, sorted alphabetically by path
     const files = await this.prisma.repositoryFile.findMany({
       where: {
         repositoryId,
@@ -69,9 +69,12 @@ export class ParsingService {
           not: '',
         },
       },
+      orderBy: {
+        filePath: 'asc',
+      },
     });
 
-    const allChunks = [];
+    let totalChunksCount = 0;
     for (const file of files) {
       const fileChunks = this.chunkFile(
         file.id,
@@ -80,16 +83,31 @@ export class ParsingService {
         file.language,
         repositoryId,
       );
-      allChunks.push(...fileChunks);
+
+      if (fileChunks.length > 0) {
+        const remainingCap = 500 - totalChunksCount;
+        if (remainingCap <= 0) {
+          break;
+        }
+
+        const chunksToAdd = fileChunks.slice(0, remainingCap);
+        await this.prisma.chunk.createMany({
+          data: chunksToAdd,
+        });
+
+        totalChunksCount += chunksToAdd.length;
+
+        // Update repository chunkCount in database incrementally
+        await this.prisma.repository.update({
+          where: { id: repositoryId },
+          data: { chunkCount: totalChunksCount },
+        });
+
+        // Add a 200ms delay to make chunking visible on UI
+        await new Promise((resolve) => setTimeout(resolve, 200));
+      }
     }
 
-    if (allChunks.length > 0) {
-      // Save chunks to the database in bulk
-      await this.prisma.chunk.createMany({
-        data: allChunks,
-      });
-    }
-
-    return allChunks;
+    return totalChunksCount;
   }
 }

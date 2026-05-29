@@ -117,7 +117,7 @@ export default function RepositoryDashboard() {
 
     if (highlightRange && selectedFileContent) {
       const { startLine, endLine } = highlightRange;
-      
+
       decorationsRef.current = editorInstance.deltaDecorations([], [
         {
           range: new monacoInstance.Range(startLine, 1, endLine, 1),
@@ -185,16 +185,16 @@ export default function RepositoryDashboard() {
 
   const fileTree = useMemo(() => {
     const root: any = { name: 'root', path: '', isDirectory: true, children: {} };
-    
+
     files.forEach(file => {
       const parts = file.filePath.split('/');
       let current = root;
       let currentPath = '';
-      
+
       parts.forEach((part: string, index: number) => {
         currentPath = currentPath ? `${currentPath}/${part}` : part;
         const isLast = index === parts.length - 1;
-        
+
         if (!current.children[part]) {
           current.children[part] = {
             name: part,
@@ -207,19 +207,19 @@ export default function RepositoryDashboard() {
         current = current.children[part];
       });
     });
-    
+
     return root;
   }, [files]);
 
   const renderTreeNode = (node: any, level = 0) => {
     const isExpanded = !!expandedFolders[node.path];
-    
+
     if (!node.isDirectory) {
       const isSelected = selectedFile?.id === node.id;
       return (
-        <div 
-          key={node.id} 
-          className={`flex justify-between items-center group py-2 px-3 cursor-default transition-all duration-300 border-b border-lux-border/30 last:border-0 font-mono text-xs ${isSelected ? 'bg-lux-gold/10' : 'hover:bg-lux-card/40'}`} 
+        <div
+          key={node.id}
+          className={`flex justify-between items-center group py-2 px-3 cursor-default transition-all duration-300 border-b border-lux-border/30 last:border-0 font-mono text-xs ${isSelected ? 'bg-lux-gold/10' : 'hover:bg-lux-card/40'}`}
           style={{ paddingLeft: `${level * 1.2 + 0.75}rem` }}
         >
           <div className="flex items-center gap-2 truncate pr-4">
@@ -231,13 +231,12 @@ export default function RepositoryDashboard() {
           <div className="text-[10px] text-lux-creme-dim flex-shrink-0 flex items-center gap-3 font-mono">
             <span className="w-12 truncate text-right hidden sm:inline">{node.language}</span>
             <span className="w-16 text-right hidden md:inline">{formatSize(node.sizeBytes)}</span>
-            <button 
+            <button
               onClick={() => handleViewFile(node)}
-              className={`px-2 py-0.5 border text-[9px] uppercase tracking-wider transition-colors font-semibold font-mono ${
-                isSelected 
-                  ? 'border-lux-gold text-lux-bg bg-lux-gold hover:bg-transparent hover:text-lux-gold' 
+              className={`px-2 py-0.5 border text-[9px] uppercase tracking-wider transition-colors font-semibold font-mono ${isSelected
+                  ? 'border-lux-gold text-lux-bg bg-lux-gold hover:bg-transparent hover:text-lux-gold'
                   : 'border-lux-border text-lux-creme-dim hover:border-lux-gold hover:text-lux-gold'
-              }`}
+                }`}
             >
               {c.viewButton}
             </button>
@@ -245,7 +244,7 @@ export default function RepositoryDashboard() {
         </div>
       );
     }
-    
+
     const childrenKeys = Object.keys(node.children).sort((a, b) => {
       const childA = node.children[a];
       const childB = node.children[b];
@@ -253,12 +252,12 @@ export default function RepositoryDashboard() {
       if (!childA.isDirectory && childB.isDirectory) return 1;
       return a.localeCompare(b);
     });
-    
+
     return (
       <div key={node.path}>
-        <div 
+        <div
           onClick={() => toggleFolder(node.path)}
-          className="flex items-center gap-2 hover:bg-lux-card/30 py-2 px-3 cursor-pointer border-b border-lux-border/30 last:border-0 font-mono text-xs" 
+          className="flex items-center gap-2 hover:bg-lux-card/30 py-2 px-3 cursor-pointer border-b border-lux-border/30 last:border-0 font-mono text-xs"
           style={{ paddingLeft: `${level * 1.2 + 0.75}rem` }}
         >
           <ChevronRight className={`w-3.5 h-3.5 text-lux-creme-dim transition-transform duration-300 ${isExpanded ? 'rotate-90 text-lux-gold' : ''}`} />
@@ -280,7 +279,7 @@ export default function RepositoryDashboard() {
       try {
         const repoData = await getRepositoryDetails(id);
         setRepo(repoData);
-        
+
         const filesData = await getRepositoryFiles(id);
         setFiles(filesData);
 
@@ -290,7 +289,7 @@ export default function RepositoryDashboard() {
           transformed.push({ role: 'user', content: h.userQuery });
           transformed.push({ role: 'assistant', content: h.aiResponse, sources: h.sourcesJson });
         });
-        
+
         if (transformed.length === 0) {
           setChatMessages([
             { role: 'assistant', content: 'Index mapping completed. Ready for query analysis.' }
@@ -308,7 +307,7 @@ export default function RepositoryDashboard() {
         setIsLoading(false);
       }
     };
-    
+
     loadData();
   }, [id, router]);
 
@@ -359,7 +358,7 @@ export default function RepositoryDashboard() {
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!chatInput.trim() || isSending) return;
-    
+
     const userQuery = chatInput.trim();
     setChatInput('');
     setIsSending(true);
@@ -441,6 +440,28 @@ export default function RepositoryDashboard() {
     );
   }
 
+  if (repo && (repo.status === 'processing' || repo.status === 'pending')) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[calc(100vh-12rem)] w-full max-w-xl mx-auto p-8 space-y-6 animate-reveal-up text-center">
+        <Cpu className="w-12 h-12 text-lux-gold animate-spin opacity-80" style={{ animationDuration: '3s' }} />
+        <div className="space-y-2">
+          <h2 className="text-lg font-serif font-light tracking-widest text-lux-creme uppercase">Synthesizing Repository Context</h2>
+          <p className="text-[10px] font-mono tracking-wider text-lux-creme-dim uppercase">
+            Deconstructing files into vector embeddings
+          </p>
+        </div>
+        <div className="w-full border border-lux-border p-4 bg-lux-card/10 space-y-2 font-mono text-xs text-lux-creme-dim">
+          <p>Files parsed: <span className="text-lux-gold font-bold">{repo.fileCount || 0}</span></p>
+          <p>Chunks generated: <span className="text-lux-gold font-bold">{repo.chunkCount || 0}</span></p>
+          <p>Chunks embedded: <span className="text-lux-gold font-bold">{repo.embeddedCount || 0}</span> / <span className="opacity-60">{repo.chunkCount || '...'}</span></p>
+        </div>
+        <p className="text-[10px] font-mono text-lux-gold animate-pulse tracking-widest uppercase">
+          &gt; Processing embedding telemetry...
+        </p>
+      </div>
+    );
+  }
+
   const formatSize = (bytes: number) => {
     if (bytes < 1024) return bytes + ' B';
     if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
@@ -449,7 +470,7 @@ export default function RepositoryDashboard() {
 
   return (
     <div className="flex flex-col h-[calc(100vh-10.5rem)] w-full max-w-[1800px] mx-auto space-y-6 animate-reveal-up">
-      
+
       {/* Header Panel */}
       <div className="border border-lux-border p-6 bg-lux-card/15 backdrop-blur-md flex flex-col md:flex-row justify-between items-start md:items-center shadow-lux gap-6">
         <div className="flex items-start gap-4">
@@ -462,7 +483,7 @@ export default function RepositoryDashboard() {
           </Link>
           <div>
             <h1 className="text-2xl font-serif font-light tracking-widest text-lux-creme flex items-center gap-3 uppercase">
-              <HardDrive className="w-6 h-6 text-lux-gold" /> 
+              <HardDrive className="w-6 h-6 text-lux-gold" />
               {repo.name}
               <button
                 onClick={handleOpenInsights}
@@ -492,7 +513,7 @@ export default function RepositoryDashboard() {
 
       {/* Main Split Area */}
       <div className="flex-1 flex flex-col md:flex-row gap-6 min-h-0">
-        
+
         {/* File Explorer Panel */}
         <div className={`md:w-1/3 border border-lux-border flex flex-col h-full bg-lux-card/15 backdrop-blur-md shadow-lux ${isChatFullscreen ? 'hidden' : 'flex'}`}>
           <div className="border-b border-lux-border p-4 bg-lux-card/45 flex justify-between items-center">
@@ -500,7 +521,7 @@ export default function RepositoryDashboard() {
               <Folder className="w-4 h-4 text-lux-gold" />
               <h2 className="uppercase tracking-widest text-xs font-mono font-bold text-lux-creme">{c.explorerTreeTitle}</h2>
             </div>
-            <button 
+            <button
               onClick={() => setIsExpandedView(true)}
               className="p-1.5 border border-lux-border text-lux-creme-dim hover:text-lux-gold hover:border-lux-gold transition-colors duration-300"
               title="Expand Workspace"
@@ -508,7 +529,7 @@ export default function RepositoryDashboard() {
               <Maximize2 className="w-3.5 h-3.5" />
             </button>
           </div>
-          
+
           <div className="flex-1 overflow-y-auto p-2 space-y-0.5 scrollbar-thin">
             {files.length === 0 ? (
               <p className="text-[10px] font-mono text-lux-creme-dim italic p-4">{c.allFilesOffline}</p>
@@ -522,7 +543,7 @@ export default function RepositoryDashboard() {
                   </div>
                   <div className="text-[9px] text-lux-creme-dim flex-shrink-0 flex gap-3 font-mono uppercase tracking-wider items-center">
                     <span className="w-12 truncate text-right hidden lg:inline">{file.language}</span>
-                    <button 
+                    <button
                       onClick={() => handleViewFile(file)}
                       className="px-2 py-0.5 border border-lux-border hover:border-lux-gold text-lux-creme-dim hover:text-lux-gold text-[9px] transition-colors"
                     >
@@ -536,17 +557,15 @@ export default function RepositoryDashboard() {
         </div>
 
         {/* Chat Panel */}
-        <div className={`flex flex-col overflow-hidden ${
-          isChatFullscreen 
-            ? 'fixed inset-0 z-50 p-6 bg-lux-bg/95 backdrop-blur-md' 
+        <div className={`flex flex-col overflow-hidden ${isChatFullscreen
+            ? 'fixed inset-0 z-50 p-6 bg-lux-bg/95 backdrop-blur-md'
             : 'md:w-2/3 border border-lux-border shadow-lux relative h-full'
-        }`}>
-          <div className={`flex-1 flex flex-col min-h-0 bg-lux-card/10 relative ${
-            isChatFullscreen 
-              ? 'border border-lux-border bg-lux-card shadow-lux' 
-              : ''
           }`}>
-            
+          <div className={`flex-1 flex flex-col min-h-0 bg-lux-card/10 relative ${isChatFullscreen
+              ? 'border border-lux-border bg-lux-card shadow-lux'
+              : ''
+            }`}>
+
             {/* Header controls */}
             <div className="border-b border-lux-border p-4 bg-lux-card/45 flex items-center justify-between z-20">
               <div className="flex items-center gap-2">
@@ -554,14 +573,14 @@ export default function RepositoryDashboard() {
                 <h2 className="uppercase tracking-widest text-xs font-mono font-bold text-lux-creme">{c.chatHeaderTitle}</h2>
               </div>
               <div className="flex items-center gap-3 font-mono text-[9px]">
-                <button 
+                <button
                   onClick={handleSaveChat}
                   disabled={chatMessages.length === 0 || (chatMessages.length === 1 && chatMessages[0].content.includes('Index mapping completed'))}
                   className="px-2.5 py-1 border border-emerald-500/30 text-emerald-400 hover:bg-emerald-500 hover:text-lux-bg disabled:opacity-40 disabled:cursor-not-allowed font-bold uppercase transition-colors"
                 >
                   {c.saveChatButton}
                 </button>
-                <button 
+                <button
                   onClick={handleClearHistory}
                   className="px-2.5 py-1 border border-red-500/30 text-red-400 font-bold uppercase transition-colors"
                 >
@@ -577,7 +596,7 @@ export default function RepositoryDashboard() {
                 </button>
               </div>
             </div>
-            
+
             {/* Chat Messages */}
             <div className="flex-1 overflow-y-auto p-6 space-y-6 flex flex-col font-mono text-xs scrollbar-thin">
               {chatMessages.map((msg, i) => (
@@ -585,18 +604,17 @@ export default function RepositoryDashboard() {
                   <span className="text-[9px] text-lux-creme-dim mb-1.5 uppercase tracking-widest font-bold">
                     {msg.role === 'user' ? c.userRoleLabel : c.systemRoleLabel}
                   </span>
-                  <div 
-                    className={`p-4 border text-xs leading-relaxed ${
-                      msg.role === 'user' 
-                        ? 'border-lux-gold/30 bg-lux-gold/5 text-lux-creme' 
+                  <div
+                    className={`p-4 border text-xs leading-relaxed ${msg.role === 'user'
+                        ? 'border-lux-gold/30 bg-lux-gold/5 text-lux-creme'
                         : 'border-lux-border bg-lux-card text-lux-creme'
-                    }`}
+                      }`}
                   >
-                    <div 
+                    <div
                       className="whitespace-pre-wrap"
                       dangerouslySetInnerHTML={{ __html: formatMarkdown(msg.content) }}
                     />
-                    
+
                     {msg.sources && msg.sources.length > 0 && (
                       <div className="mt-4 pt-3 border-t border-lux-border/50 text-[10px]">
                         <span className="text-lux-gold font-bold uppercase tracking-wider block mb-2 font-mono text-[9px]">{c.citationsLabel}</span>
@@ -634,8 +652,8 @@ export default function RepositoryDashboard() {
                 <div className="flex items-center justify-center gap-2 py-2 text-lux-copper font-mono text-xs border border-dashed border-lux-copper/35 bg-lux-copper/5 rounded">
                   <AlertTriangle className="w-4 h-4 flex-shrink-0" />
                   <span>
-                    {repo?.chunkCount > 0 
-                      ? "Can't use on RAG, embedding failed" 
+                    {repo?.chunkCount > 0
+                      ? "Can't use on RAG, embedding failed"
                       : "Uploaded but can't chunk into RAG, chat option not available"}
                   </span>
                 </div>
@@ -650,8 +668,8 @@ export default function RepositoryDashboard() {
                     disabled={isSending}
                     className="flex-1 bg-transparent border-b border-lux-border/60 focus:border-lux-gold/50 text-lux-creme placeholder:text-lux-creme-dim/30 px-2 py-2 outline-none font-mono text-xs"
                   />
-                  <button 
-                    type="submit" 
+                  <button
+                    type="submit"
                     disabled={!chatInput.trim() || isSending}
                     className="p-3 border border-lux-border text-lux-creme-dim hover:text-lux-gold hover:border-lux-gold transition-colors disabled:opacity-40"
                   >
@@ -676,7 +694,7 @@ export default function RepositoryDashboard() {
                 {c.workspaceTitle} // {repo.name}
               </h2>
             </div>
-            <button 
+            <button
               onClick={() => {
                 setIsExpandedView(false);
                 setSelectedFile(null);
@@ -698,7 +716,7 @@ export default function RepositoryDashboard() {
                   <Folder className="w-4 h-4 text-lux-gold" />
                   <span className="text-[10px] font-mono tracking-widest text-lux-creme font-bold uppercase">{c.workspaceFileHierarchy}</span>
                 </div>
-                <button 
+                <button
                   onClick={() => {
                     const allExpanded: Record<string, boolean> = {};
                     const expandAll = (node: any) => {
@@ -715,7 +733,7 @@ export default function RepositoryDashboard() {
                   {c.workspaceExpandAll}
                 </button>
               </div>
-              
+
               <div className="flex-1 overflow-y-auto p-2 space-y-0.5 scrollbar-thin">
                 {Object.keys(fileTree.children).length === 0 ? (
                   <p className="text-[10px] font-mono text-lux-creme-dim italic p-4">&gt; {c.allFilesOffline}</p>
@@ -807,7 +825,7 @@ export default function RepositoryDashboard() {
                 {copyContent.dashboard.insightsTitle} // {repo.name}
               </h2>
             </div>
-            <button 
+            <button
               onClick={() => setIsInsightOpen(false)}
               className="p-2 border border-lux-border text-lux-creme-dim hover:text-lux-creme hover:border-lux-creme transition-colors duration-300"
               title="Exit insights"
@@ -823,7 +841,7 @@ export default function RepositoryDashboard() {
               <div className="border-b border-lux-border p-4 bg-lux-card/45">
                 <span className="text-[10px] font-mono tracking-widest text-lux-gold uppercase font-bold">{copyContent.dashboard.insightsAiBlueprint}</span>
               </div>
-              
+
               <div className="flex-1 overflow-y-auto p-6 space-y-4 text-lux-creme-dim font-mono text-xs select-text">
                 {isSummaryLoading ? (
                   <div className="flex flex-col items-center justify-center h-full space-y-4">
@@ -847,7 +865,7 @@ export default function RepositoryDashboard() {
                           <h3 className="text-xs font-serif font-light text-lux-gold border-b border-lux-border/40 pb-2 mb-3 uppercase tracking-widest">
                             {title}
                           </h3>
-                          <div 
+                          <div
                             className="whitespace-pre-wrap text-lux-creme-dim leading-relaxed text-xs"
                             dangerouslySetInnerHTML={{ __html: formatMarkdown(body) }}
                           />
@@ -866,10 +884,10 @@ export default function RepositoryDashboard() {
               </div>
 
               <div className="flex-1 overflow-y-auto p-6 space-y-6 text-lux-creme font-mono text-xs scrollbar-thin">
-                <StatsSummary 
-                  fileCount={repo.fileCount} 
-                  chunkCount={repo.chunkCount} 
-                  primaryLanguage={repo.primaryLanguage} 
+                <StatsSummary
+                  fileCount={repo.fileCount}
+                  chunkCount={repo.chunkCount}
+                  primaryLanguage={repo.primaryLanguage}
                 />
                 <LanguageChart files={files} />
                 <LargestFilesTable files={files} />
