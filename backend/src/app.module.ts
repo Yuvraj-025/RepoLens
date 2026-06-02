@@ -15,7 +15,7 @@ import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
     ThrottlerModule.forRoot([
       {
         name: 'global',
-        ttl: 60000, // 1 minute in milliseconds
+        ttl: 60, // 1 minute in seconds
         limit: 100, // 100 requests globally per minute per IP
       },
     ]),

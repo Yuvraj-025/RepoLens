@@ -295,10 +295,57 @@ export class RepositoryService {
         throw new Error(`GitHub API returned ${response.status} ${response.statusText}`);
       }
 
-      const arrayBuffer = await response.arrayBuffer();
-      buffer = Buffer.from(arrayBuffer);
+      // Pre-check Content-Length if present
+      const contentLengthHeader = response.headers.get('content-length');
+      if (contentLengthHeader) {
+        const contentLength = parseInt(contentLengthHeader, 10);
+        if (!isNaN(contentLength) && contentLength > 5 * 1024 * 1024) {
+          throw new BadRequestException('Repository ZIP file size exceeds the 5MB limit');
+        }
+      }
+
+      if (!response.body) {
+        throw new Error('Response body is empty or not readable');
+      }
+
+      const limit = 5 * 1024 * 1024;
+      if (typeof (response.body as any).getReader === 'function') {
+        const reader = response.body.getReader();
+        const chunks: Uint8Array[] = [];
+        let totalLength = 0;
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          if (value) {
+            totalLength += value.length;
+            if (totalLength > limit) {
+              await reader.cancel().catch(() => {});
+              throw new BadRequestException('Repository ZIP file size exceeds the 5MB limit');
+            }
+            chunks.push(value);
+          }
+        }
+        const arrayBuffer = new Uint8Array(totalLength);
+        let offset = 0;
+        for (const chunk of chunks) {
+          arrayBuffer.set(chunk, offset);
+          offset += chunk.length;
+        }
+        buffer = Buffer.from(arrayBuffer);
+      } else {
+        const chunks: Buffer[] = [];
+        let totalLength = 0;
+        for await (const chunk of (response.body as any)) {
+          totalLength += chunk.length;
+          if (totalLength > limit) {
+            throw new BadRequestException('Repository ZIP file size exceeds the 5MB limit');
+          }
+          chunks.push(chunk as Buffer);
+        }
+        buffer = Buffer.concat(chunks);
+      }
     } catch (e: any) {
-      throw new BadRequestException(`Failed to download repository from GitHub: ${e.message}`);
+      throw e instanceof BadRequestException ? e : new BadRequestException(`Failed to download repository from GitHub: ${e.message}`);
     }
 
     // Mock Express.Multer.File to invoke standard upload repository pipeline

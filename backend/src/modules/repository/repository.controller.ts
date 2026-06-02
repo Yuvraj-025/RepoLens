@@ -9,7 +9,7 @@ export class RepositoryController {
   constructor(private readonly repositoryService: RepositoryService) {}
 
   @Post('import-github')
-  @Throttle({ global: { limit: 3, ttl: 60000 } })
+  @Throttle({ global: { limit: 3, ttl: 60 } })
   async importGithubRepository(
     @Body() body: { githubUrl: string },
     @Request() req: any,
@@ -19,7 +19,7 @@ export class RepositoryController {
 
 
   @Post('upload')
-  @Throttle({ global: { limit: 3, ttl: 60000 } })
+  @Throttle({ global: { limit: 3, ttl: 60 } })
   @UseInterceptors(FileInterceptor('file'))
   async uploadRepository(
     @UploadedFile(

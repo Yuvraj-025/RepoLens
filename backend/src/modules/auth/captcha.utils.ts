@@ -3,6 +3,26 @@ import * as crypto from 'crypto';
 const CAPTCHA_SECRET = process.env.JWT_SECRET || 'super-secret-captcha-key';
 const CAPTCHA_TTL_MS = 5 * 60 * 1000; // 5 minutes
 
+// In-memory registry to prevent CAPTCHA replay attacks
+const consumedCaptchasMap = new Map<string, number>();
+
+function markCaptchaAsUsed(signature: string, expiresAt: number) {
+  consumedCaptchasMap.set(signature, expiresAt);
+}
+
+function isCaptchaUsed(signature: string): boolean {
+  return consumedCaptchasMap.has(signature);
+}
+
+function cleanExpiredCaptchas() {
+  const now = Date.now();
+  for (const [sig, exp] of consumedCaptchasMap.entries()) {
+    if (now > exp) {
+      consumedCaptchasMap.delete(sig);
+    }
+  }
+}
+
 export interface CaptchaResult {
   token: string;
   svg: string;
@@ -57,6 +77,9 @@ export function generateCaptchaSvg(theme: 'green' | 'cyan' = 'green'): CaptchaRe
 }
 
 export function verifyCaptcha(token: string, userInput: string): boolean {
+  // Purge expired signatures to free memory
+  cleanExpiredCaptchas();
+
   try {
     if (!token || !userInput) return false;
     const decoded = JSON.parse(Buffer.from(token, 'base64').toString('utf-8'));
@@ -66,12 +89,20 @@ export function verifyCaptcha(token: string, userInput: string): boolean {
       return false; // Expired
     }
 
+    if (isCaptchaUsed(signature)) {
+      return false; // Replay attack prevention
+    }
+
     const expectedSignature = crypto
       .createHmac('sha256', CAPTCHA_SECRET)
       .update(`${userInput.toLowerCase().trim()}:${expiresAt}`)
       .digest('hex');
 
-    return crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expectedSignature));
+    const isValid = crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expectedSignature));
+    if (isValid) {
+      markCaptchaAsUsed(signature, expiresAt);
+    }
+    return isValid;
   } catch (e) {
     return false;
   }

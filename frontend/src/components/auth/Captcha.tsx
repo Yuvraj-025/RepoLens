@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { getCaptcha } from '@/lib/api/auth';
 import { copyContent } from '@/lib/content';
 
@@ -15,6 +15,11 @@ export default function Captcha({ onCaptchaChange, colorTheme = 'green' }: Captc
 
   const c = copyContent.login; // Uses auth-shared copy variables
 
+  const onCaptchaChangeRef = useRef(onCaptchaChange);
+  useEffect(() => {
+    onCaptchaChangeRef.current = onCaptchaChange;
+  }, [onCaptchaChange]);
+
   const fetchNewCaptcha = useCallback(async () => {
     setIsLoading(true);
     try {
@@ -22,19 +27,20 @@ export default function Captcha({ onCaptchaChange, colorTheme = 'green' }: Captc
       setCaptchaToken(data.token);
       setCaptchaSvg(data.svg);
       setUserInput('');
-      onCaptchaChange(data.token, '');
+      onCaptchaChangeRef.current(data.token, '');
     } catch (err) {
       console.error('Failed to load CAPTCHA:', err);
     } finally {
       setIsLoading(false);
     }
-  }, [colorTheme, onCaptchaChange]);
+  }, [colorTheme]);
 
   useEffect(() => {
     fetchNewCaptcha();
   }, [fetchNewCaptcha]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+
     const val = e.target.value;
     setUserInput(val);
     onCaptchaChange(captchaToken, val);

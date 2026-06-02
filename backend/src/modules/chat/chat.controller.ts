@@ -8,7 +8,7 @@ export class ChatController {
   constructor(private readonly chatService: ChatService) {}
 
   @Post('query')
-  @Throttle({ global: { limit: 10, ttl: 60000 } })
+  @Throttle({ global: { limit: 10, ttl: 60 } })
   async queryRepository(
     @Body() body: { repositoryId: string; query: string },
     @Request() req: any,
