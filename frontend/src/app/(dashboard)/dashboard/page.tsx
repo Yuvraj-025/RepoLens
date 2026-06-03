@@ -12,13 +12,33 @@ import { copyContent } from '@/lib/content';
 
 const formatMarkdown = (text: string) => {
   if (!text) return '';
+  
+  // 1. Escape HTML
   let escaped = text
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;');
+  
+  // 2. Extract code blocks and store them
+  const codeBlocks: string[] = [];
+  escaped = escaped.replace(/```(\w*)\s*\r?\n([\s\S]*?)(?:\r?\n)?```/g, (_, lang, code) => {
+    const placeholder = `__CODE_BLOCK_PLACEHOLDER_${codeBlocks.length}__`;
+    codeBlocks.push(
+      `<pre class="p-3.5 my-4 font-mono text-[11px] bg-[#0e0d0c]/85 border border-lux-border/60 text-lux-creme rounded overflow-x-auto select-text w-full break-normal"><code class="block whitespace-pre">${code}</code></pre>`
+    );
+    return placeholder;
+  });
+
+  // 3. Apply inline styling (bold, italic, inline code)
   escaped = escaped.replace(/\*\*([^\s\*](?:[\s\S]*?[^\s\*])?)\*\*/g, '<strong>$1</strong>');
   escaped = escaped.replace(/\*([^\s\*](?:[\s\S]*?[^\s\*])?)\*/g, '<em>$1</em>');
   escaped = escaped.replace(/`([^`\s](?:[^`]*?[^`\s])?)`/g, '<code class="px-1.5 py-0.5 font-mono text-[11px] bg-[#0e0d0c]/60 border border-lux-border/60 text-lux-gold rounded">$1</code>');
+
+  // 4. Restore code blocks
+  codeBlocks.forEach((blockContent, index) => {
+    escaped = escaped.replace(`__CODE_BLOCK_PLACEHOLDER_${index}__`, blockContent);
+  });
+
   return escaped;
 };
 
@@ -260,8 +280,10 @@ export default function DashboardPage() {
     );
   }, [repos, searchQuery]);
 
+  const isModalOpen = isUploading || !!repoToDelete || isInsightOpen;
+
   return (
-    <div className="flex flex-col h-full w-full max-w-7xl mx-auto space-y-10 animate-reveal-up">
+    <div className={`flex flex-col h-full w-full max-w-7xl mx-auto space-y-10 ${isModalOpen ? '' : 'animate-reveal-up'}`}>
 
       {/* Editorial Header */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end border-b border-lux-border pb-6 gap-6">

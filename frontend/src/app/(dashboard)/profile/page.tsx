@@ -65,7 +65,7 @@ export default function ProfilePage() {
   };
 
   return (
-    <div className="max-w-3xl mx-auto h-full flex flex-col space-y-8 animate-reveal-up">
+    <div className="max-w-3xl mx-auto min-h-full flex flex-col space-y-8 animate-reveal-up pb-8">
       
       {/* Page Header */}
       <div className="border-b border-lux-border pb-4 mb-4">
