@@ -47,6 +47,7 @@ export default function DashboardPage() {
   const [insightsFiles, setInsightsFiles] = useState<any[]>([]);
   const [isSummaryLoading, setIsSummaryLoading] = useState(false);
   const [summaryError, setSummaryError] = useState('');
+  const [activeInsightTab, setActiveInsightTab] = useState<'blueprint' | 'metrics'>('blueprint');
 
   const c = copyContent.dashboard;
 
@@ -275,7 +276,7 @@ export default function DashboardPage() {
 
         <button
           onClick={() => setIsUploading(true)}
-          className="border border-lux-gold/30 bg-lux-card hover:bg-lux-gold hover:text-lux-bg px-6 py-3 font-mono text-xs tracking-widest font-bold uppercase transition-all duration-500 flex items-center gap-2"
+          className="w-full sm:w-auto border border-lux-gold/30 bg-lux-card hover:bg-lux-gold hover:text-lux-bg px-6 py-3 font-mono text-xs tracking-widest font-bold uppercase transition-all duration-500 flex items-center justify-center gap-2"
         >
           <Upload className="w-4 h-4" />
           <span>{c.buttonUploadZip}</span>
@@ -342,7 +343,7 @@ export default function DashboardPage() {
                   </div>
                 </div>
 
-                <h3 className="text-xl font-serif font-light tracking-wide text-lux-creme group-hover:text-lux-gold transition-colors duration-300 mb-6 uppercase">
+                <h3 className="text-xl font-serif font-light tracking-wide text-lux-creme group-hover:text-lux-gold transition-colors duration-300 mb-6 uppercase pr-28">
                   {repo.name}
                 </h3>
 
@@ -384,7 +385,7 @@ export default function DashboardPage() {
       {/* ZIP Upload Modal */}
       {isUploading && (
         <div className="fixed inset-0 bg-lux-bg/85 backdrop-blur-md flex items-center justify-center z-50 p-4 animate-fade-in">
-          <div className="border border-lux-border bg-lux-card p-8 max-w-2xl w-full shadow-lux space-y-8 animate-reveal-up">
+          <div className="border border-lux-border bg-lux-card p-5 sm:p-8 max-w-2xl w-full shadow-lux space-y-6 sm:space-y-8 animate-reveal-up">
             <div className="flex justify-between items-start border-b border-lux-border pb-4">
               <div className="space-y-1">
                 <h2 className="text-2xl font-serif font-light tracking-widest text-lux-creme uppercase">
@@ -419,7 +420,7 @@ export default function DashboardPage() {
               <div className="space-y-6">
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                   {/* Step 1: Upload */}
-                  <div className="border border-lux-border p-4 bg-lux-bg/40 flex flex-col justify-between h-28">
+                  <div className="border border-lux-border p-3 sm:p-4 bg-lux-bg/40 flex flex-col justify-between h-22 sm:h-28">
                     <div className="flex justify-between items-center">
                       <span className="text-[9px] font-mono text-lux-gold tracking-widest uppercase font-bold">01 // UPLOAD</span>
                       <span className="text-[8px] font-mono text-emerald-400 border border-emerald-500/30 px-1.5 py-0.5 uppercase font-bold">Success</span>
@@ -431,7 +432,7 @@ export default function DashboardPage() {
                   </div>
 
                   {/* Step 2: Chunking */}
-                  <div className="border border-lux-border p-4 bg-lux-bg/40 flex flex-col justify-between h-28">
+                  <div className="border border-lux-border p-3 sm:p-4 bg-lux-bg/40 flex flex-col justify-between h-22 sm:h-28">
                     <div className="flex justify-between items-center">
                       <span className="text-[9px] font-mono text-lux-gold tracking-widest uppercase font-bold">02 // CHUNKING</span>
                       {activeIngestionRepo.chunkCount > 0 ? (
@@ -447,7 +448,7 @@ export default function DashboardPage() {
                   </div>
 
                   {/* Step 3: Embedding */}
-                  <div className="border border-lux-border p-4 bg-lux-bg/40 flex flex-col justify-between h-28">
+                  <div className="border border-lux-border p-3 sm:p-4 bg-lux-bg/40 flex flex-col justify-between h-22 sm:h-28">
                     <div className="flex justify-between items-center">
                       <span className="text-[9px] font-mono text-lux-gold tracking-widest uppercase font-bold">03 // EMBEDDING</span>
                       {activeIngestionRepo.embeddedCount === activeIngestionRepo.chunkCount && activeIngestionRepo.chunkCount > 0 ? (
@@ -618,12 +619,12 @@ export default function DashboardPage() {
 
       {/* System Insights Modal Overlay */}
       {isInsightOpen && selectedRepoForInsights && (
-        <div className="fixed inset-0 z-50 bg-lux-bg/95 backdrop-blur-md p-6 md:p-12 flex flex-col animate-fade-in">
+        <div className="fixed inset-0 z-50 bg-lux-bg/95 backdrop-blur-md p-4 md:p-12 flex flex-col animate-fade-in">
           {/* Header */}
-          <div className="border border-lux-gold/30 bg-lux-card/40 p-5 mb-8 flex justify-between items-center shadow-lux animate-reveal-up">
+          <div className="border border-lux-gold/30 bg-lux-card/40 p-4 sm:p-5 mb-4 sm:mb-8 flex justify-between items-center shadow-lux animate-reveal-up">
             <div className="flex items-center gap-3">
               <Info className="text-lux-gold w-5 h-5 animate-pulse" />
-              <h2 className="text-lg md:text-xl font-serif font-light tracking-widest text-lux-creme uppercase">
+              <h2 className="text-base sm:text-lg md:text-xl font-serif font-light tracking-widest text-lux-creme uppercase">
                 {c.insightsTitle} // {selectedRepoForInsights.name}
               </h2>
             </div>
@@ -639,11 +640,37 @@ export default function DashboardPage() {
             </button>
           </div>
 
+          {/* Mobile Insight Tabs Switcher */}
+          <div className="flex md:hidden border border-lux-border mb-4 font-mono text-xs bg-lux-card/20">
+            <button
+              onClick={() => setActiveInsightTab('blueprint')}
+              className={`flex-1 py-3 text-center uppercase tracking-widest font-bold transition-all ${
+                activeInsightTab === 'blueprint'
+                  ? 'text-lux-gold bg-lux-card/40 border-b border-lux-gold'
+                  : 'text-lux-creme-dim hover:text-lux-creme'
+              }`}
+            >
+              Blueprint
+            </button>
+            <button
+              onClick={() => setActiveInsightTab('metrics')}
+              className={`flex-1 py-3 text-center uppercase tracking-widest font-bold transition-all ${
+                activeInsightTab === 'metrics'
+                  ? 'text-lux-gold bg-lux-card/40 border-b border-lux-gold'
+                  : 'text-lux-creme-dim hover:text-lux-creme'
+              }`}
+            >
+              Metrics
+            </button>
+          </div>
+
           {/* Core Content Grid */}
-          <div className="flex-1 flex flex-col md:flex-row gap-8 min-h-0 overflow-y-auto animate-reveal-up delay-100">
+          <div className="flex-1 flex flex-col md:flex-row gap-6 md:gap-8 min-h-0 overflow-y-auto animate-reveal-up delay-100">
 
             {/* AI Architecture Blueprint */}
-            <div className="flex-1 md:flex-[0.65] border border-lux-border flex flex-col bg-lux-card/15 overflow-hidden">
+            <div className={`flex-1 md:flex-[0.65] border border-lux-border flex flex-col bg-lux-card/15 overflow-hidden ${
+              activeInsightTab === 'blueprint' ? 'flex' : 'hidden md:flex'
+            }`}>
               <div className="border-b border-lux-border p-4 bg-lux-card/40">
                 <span className="text-[10px] font-mono tracking-widest text-lux-gold uppercase font-bold">{c.insightsAiBlueprint}</span>
               </div>
@@ -684,7 +711,9 @@ export default function DashboardPage() {
             </div>
 
             {/* Metrics Sidebar */}
-            <div className="flex-1 md:flex-[0.35] border border-lux-border flex flex-col bg-lux-card/15 overflow-hidden">
+            <div className={`flex-1 md:flex-[0.35] border border-lux-border flex flex-col bg-lux-card/15 overflow-hidden ${
+              activeInsightTab === 'metrics' ? 'flex' : 'hidden md:flex'
+            }`}>
               <div className="border-b border-lux-border p-4 bg-lux-card/40">
                 <span className="text-[10px] font-mono tracking-widest text-lux-gold uppercase font-bold">{c.insightsMetrics}</span>
               </div>

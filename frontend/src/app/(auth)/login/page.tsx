@@ -46,7 +46,7 @@ export default function LoginPage() {
 
   return (
     <div className="flex flex-col items-center justify-center flex-1 py-12 px-4 md:px-8 animate-reveal-up">
-      <div className="w-full max-w-xl border border-lux-border p-8 md:p-12 bg-lux-card/50 backdrop-blur-lg shadow-lux relative">
+      <div className="w-full max-w-xl border border-lux-border p-5 sm:p-8 md:p-12 bg-lux-card/50 backdrop-blur-lg shadow-lux relative">
         <div className="absolute top-0 right-0 p-4 font-mono text-[9px] tracking-widest text-lux-gold/60 uppercase">
           {c.nodeLabel}
         </div>

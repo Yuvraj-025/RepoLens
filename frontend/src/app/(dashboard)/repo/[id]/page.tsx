@@ -63,6 +63,8 @@ export default function RepositoryDashboard() {
   const [summary, setSummary] = useState('');
   const [isSummaryLoading, setIsSummaryLoading] = useState(false);
   const [summaryError, setSummaryError] = useState('');
+  const [activeMobileTab, setActiveMobileTab] = useState<'chat' | 'files'>('chat');
+  const [activeWorkspaceTab, setActiveWorkspaceTab] = useState<'files' | 'code'>('code');
 
   const c = copyContent.repoDetails;
 
@@ -173,6 +175,7 @@ export default function RepositoryDashboard() {
     setIsFileLoading(true);
     setSelectedFile(file);
     setHighlightRange(range);
+    setActiveWorkspaceTab('code');
     try {
       const fileDetails = await getRepositoryFile(id, file.id);
       setSelectedFileContent(fileDetails.content);
@@ -219,8 +222,8 @@ export default function RepositoryDashboard() {
       return (
         <div
           key={node.id}
-          className={`flex justify-between items-center group py-2 px-3 cursor-default transition-all duration-300 border-b border-lux-border/30 last:border-0 font-mono text-xs ${isSelected ? 'bg-lux-gold/10' : 'hover:bg-lux-card/40'}`}
-          style={{ paddingLeft: `${level * 1.2 + 0.75}rem` }}
+          className={`flex justify-between items-center group py-2 px-3 cursor-default transition-all duration-300 border-b border-lux-border/30 last:border-0 font-mono text-xs pl-[calc(var(--indent-level)*0.4rem+0.4rem)] md:pl-[calc(var(--indent-level)*1.2rem+0.75rem)] ${isSelected ? 'bg-lux-gold/10' : 'hover:bg-lux-card/40'}`}
+          style={{ '--indent-level': level } as React.CSSProperties}
         >
           <div className="flex items-center gap-2 truncate pr-4">
             <FileCode className={`w-3.5 h-3.5 flex-shrink-0 ${isSelected ? 'text-lux-gold' : 'text-lux-creme-dim'}`} />
@@ -257,8 +260,8 @@ export default function RepositoryDashboard() {
       <div key={node.path}>
         <div
           onClick={() => toggleFolder(node.path)}
-          className="flex items-center gap-2 hover:bg-lux-card/30 py-2 px-3 cursor-pointer border-b border-lux-border/30 last:border-0 font-mono text-xs"
-          style={{ paddingLeft: `${level * 1.2 + 0.75}rem` }}
+          className="flex items-center gap-2 hover:bg-lux-card/30 py-2 px-3 cursor-pointer border-b border-lux-border/30 last:border-0 font-mono text-xs pl-[calc(var(--indent-level)*0.4rem+0.4rem)] md:pl-[calc(var(--indent-level)*1.2rem+0.75rem)]"
+          style={{ '--indent-level': level } as React.CSSProperties}
         >
           <ChevronRight className={`w-3.5 h-3.5 text-lux-creme-dim transition-transform duration-300 ${isExpanded ? 'rotate-90 text-lux-gold' : ''}`} />
           <Folder className="w-3.5 h-3.5 text-lux-gold flex-shrink-0" />
@@ -472,7 +475,7 @@ export default function RepositoryDashboard() {
     <div className="flex flex-col h-[calc(100vh-10.5rem)] w-full max-w-[1800px] mx-auto space-y-6 animate-reveal-up">
 
       {/* Header Panel */}
-      <div className="border border-lux-border p-6 bg-lux-card/15 backdrop-blur-md flex flex-col md:flex-row justify-between items-start md:items-center shadow-lux gap-6">
+      <div className="border border-lux-border p-4 md:p-6 bg-lux-card/15 backdrop-blur-md flex flex-col md:flex-row justify-between items-start md:items-center shadow-lux gap-6">
         <div className="flex items-start gap-4">
           <Link
             href="/dashboard"
@@ -482,7 +485,7 @@ export default function RepositoryDashboard() {
             <ArrowLeft className="w-4 h-4" />
           </Link>
           <div>
-            <h1 className="text-2xl font-serif font-light tracking-widest text-lux-creme flex items-center gap-3 uppercase">
+            <h1 className="text-xl md:text-2xl font-serif font-light tracking-widest text-lux-creme flex items-center gap-3 uppercase">
               <HardDrive className="w-6 h-6 text-lux-gold" />
               {repo.name}
               <button
@@ -502,7 +505,7 @@ export default function RepositoryDashboard() {
             </p>
           </div>
         </div>
-        <div className="text-right flex items-center gap-4 border-l border-lux-border pl-6">
+        <div className="flex items-center gap-4 border-t pt-4 mt-2 w-full md:w-auto md:border-t-0 md:pt-0 md:mt-0 md:border-l md:pl-6 border-lux-border">
           <Cpu className="w-10 h-10 text-lux-gold opacity-60" />
           <div className="text-[10px] font-mono text-lux-creme-dim space-y-1 text-left uppercase tracking-wider">
             <p>{c.langLabel} {repo.primaryLanguage || 'UNKNOWN'}</p>
@@ -511,11 +514,37 @@ export default function RepositoryDashboard() {
         </div>
       </div>
 
+      {/* Mobile Tab Control */}
+      <div className="flex md:hidden border border-lux-border font-mono text-xs bg-lux-card/25">
+        <button
+          onClick={() => setActiveMobileTab('chat')}
+          className={`flex-1 py-3 text-center uppercase tracking-widest font-bold transition-all ${
+            activeMobileTab === 'chat'
+              ? 'text-lux-gold bg-lux-card/40 border-b border-lux-gold'
+              : 'text-lux-creme-dim hover:text-lux-creme'
+          }`}
+        >
+          Chat Analysis
+        </button>
+        <button
+          onClick={() => setActiveMobileTab('files')}
+          className={`flex-1 py-3 text-center uppercase tracking-widest font-bold transition-all ${
+            activeMobileTab === 'files'
+              ? 'text-lux-gold bg-lux-card/40 border-b border-lux-gold'
+              : 'text-lux-creme-dim hover:text-lux-creme'
+          }`}
+        >
+          File Catalog
+        </button>
+      </div>
+
       {/* Main Split Area */}
       <div className="flex-1 flex flex-col md:flex-row gap-6 min-h-0">
 
         {/* File Explorer Panel */}
-        <div className={`md:w-1/3 border border-lux-border flex flex-col h-full bg-lux-card/15 backdrop-blur-md shadow-lux ${isChatFullscreen ? 'hidden' : 'flex'}`}>
+        <div className={`md:w-1/3 border border-lux-border flex flex-col h-full bg-lux-card/15 backdrop-blur-md shadow-lux ${
+          isChatFullscreen ? 'hidden' : 'flex'
+        } ${activeMobileTab === 'files' ? 'flex' : 'hidden md:flex'}`}>
           <div className="border-b border-lux-border p-4 bg-lux-card/45 flex justify-between items-center">
             <div className="flex items-center gap-2">
               <Folder className="w-4 h-4 text-lux-gold" />
@@ -557,10 +586,11 @@ export default function RepositoryDashboard() {
         </div>
 
         {/* Chat Panel */}
-        <div className={`flex flex-col overflow-hidden ${isChatFullscreen
+        <div className={`flex flex-col overflow-hidden ${
+          isChatFullscreen
             ? 'fixed inset-0 z-50 p-6 bg-lux-bg/95 backdrop-blur-md'
             : 'md:w-2/3 border border-lux-border shadow-lux relative h-full'
-          }`}>
+        } ${activeMobileTab === 'chat' ? 'flex' : 'hidden md:flex'}`}>
           <div className={`flex-1 flex flex-col min-h-0 bg-lux-card/10 relative ${isChatFullscreen
               ? 'border border-lux-border bg-lux-card shadow-lux'
               : ''
@@ -685,12 +715,12 @@ export default function RepositoryDashboard() {
 
       {/* Fullscreen Workspace Modal */}
       {isExpandedView && (
-        <div className="fixed inset-0 z-50 bg-lux-bg/95 backdrop-blur-md p-6 flex flex-col">
+        <div className="fixed inset-0 z-50 bg-lux-bg/95 backdrop-blur-md p-4 md:p-6 flex flex-col">
           {/* Modal Header */}
-          <div className="border border-lux-border bg-lux-card p-4 mb-6 flex justify-between items-center shadow-lux animate-reveal-up">
+          <div className="border border-lux-border bg-lux-card p-4 mb-4 sm:mb-6 flex justify-between items-center shadow-lux animate-reveal-up">
             <div className="flex items-center gap-3">
               <Terminal className="text-lux-gold w-5 h-5 animate-pulse" />
-              <h2 className="text-sm font-serif font-light tracking-widest text-lux-creme uppercase">
+              <h2 className="text-xs sm:text-sm font-serif font-light tracking-widest text-lux-creme uppercase">
                 {c.workspaceTitle} // {repo.name}
               </h2>
             </div>
@@ -707,10 +737,36 @@ export default function RepositoryDashboard() {
             </button>
           </div>
 
+          {/* Mobile Workspace Tabs Switcher */}
+          <div className="flex md:hidden border border-lux-border mb-4 font-mono text-xs bg-lux-card/25">
+            <button
+              onClick={() => setActiveWorkspaceTab('files')}
+              className={`flex-1 py-3 text-center uppercase tracking-widest font-bold transition-all ${
+                activeWorkspaceTab === 'files'
+                  ? 'text-lux-gold bg-lux-card/40 border-b border-lux-gold'
+                  : 'text-lux-creme-dim hover:text-lux-creme'
+              }`}
+            >
+              Files Explorer
+            </button>
+            <button
+              onClick={() => setActiveWorkspaceTab('code')}
+              className={`flex-1 py-3 text-center uppercase tracking-widest font-bold transition-all ${
+                activeWorkspaceTab === 'code'
+                  ? 'text-lux-gold bg-lux-card/40 border-b border-lux-gold'
+                  : 'text-lux-creme-dim hover:text-lux-creme'
+              }`}
+            >
+              Code Viewer
+            </button>
+          </div>
+
           {/* Modal Content - Split View */}
           <div className="flex-1 flex flex-col md:flex-row gap-6 min-h-0 animate-reveal-up delay-100">
             {/* Left Column: Folder Tree Explorer */}
-            <div className="flex-1 md:flex-[0.3] border border-lux-border flex flex-col bg-lux-card/15 overflow-hidden">
+            <div className={`flex-1 md:flex-[0.3] border border-lux-border flex flex-col bg-lux-card/15 overflow-hidden ${
+              activeWorkspaceTab === 'files' ? 'flex' : 'hidden md:flex'
+            }`}>
               <div className="border-b border-lux-border p-4 bg-lux-card/45 flex justify-between items-center">
                 <div className="flex items-center gap-2">
                   <Folder className="w-4 h-4 text-lux-gold" />
@@ -750,7 +806,9 @@ export default function RepositoryDashboard() {
             </div>
 
             {/* Right Column: Code Viewer */}
-            <div className="flex-1 md:flex-[0.7] border border-lux-border flex flex-col bg-lux-card/15 overflow-hidden">
+            <div className={`flex-1 md:flex-[0.7] border border-lux-border flex flex-col bg-lux-card/15 overflow-hidden ${
+              activeWorkspaceTab === 'code' ? 'flex' : 'hidden md:flex'
+            }`}>
               <div className="border-b border-lux-border p-4 bg-lux-card/45 flex justify-between items-center">
                 <div className="flex items-center gap-2 truncate pr-4">
                   <FileCode className="w-4 h-4 text-lux-gold flex-shrink-0" />
@@ -788,7 +846,7 @@ export default function RepositoryDashboard() {
                         fontFamily: '"var(--font-courier)", "Courier New", monospace',
                         lineNumbersMinChars: 3,
                         scrollBeyondLastLine: false,
-                        wordWrap: 'on',
+                        wordWrap: 'off',
                         domReadOnly: true,
                         lineHeight: 22,
                       }}

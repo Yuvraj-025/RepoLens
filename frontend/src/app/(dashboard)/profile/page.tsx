@@ -91,7 +91,7 @@ export default function ProfilePage() {
       )}
 
       {/* Profile Form Card */}
-      <div className="border border-lux-border p-8 md:p-12 bg-lux-card/25 backdrop-blur-md relative overflow-hidden">
+      <div className="border border-lux-border p-5 sm:p-8 md:p-12 bg-lux-card/25 backdrop-blur-md relative overflow-hidden">
         {/* Subtle decorative wireframe overlay */}
         <div className="absolute -top-12 -right-12 text-lux-border opacity-20 pointer-events-none">
           <User className="w-48 h-48" />
