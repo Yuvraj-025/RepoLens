@@ -10,9 +10,10 @@ async function bootstrap() {
   app.use(helmet());
   
   app.enableCors({
-    origin: process.env.NODE_ENV === 'production' ? 'https://your-vercel-domain.com' : '*',
+    origin: process.env.FRONTEND_URL ? process.env.FRONTEND_URL.split(',') : '*',
   });
   app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
-  await app.listen(3001);
+  const port = process.env.PORT || 3001;
+  await app.listen(port);
 }
 bootstrap();
