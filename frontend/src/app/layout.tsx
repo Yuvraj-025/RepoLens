@@ -2,8 +2,8 @@ import './globals.css';
 import type { Metadata } from 'next';
 
 export const metadata: Metadata = {
-  title: 'RepoLens // Codebase Intelligence',
-  description: 'AI Codebase Chat Platform - Luxury Minimalism',
+  title: 'RepoLens',
+  description: 'AI Codebase Chat Platform',
 };
 
 export default function RootLayout({
@@ -17,7 +17,7 @@ export default function RootLayout({
         {/* Soft elegant ambient background overlay */}
         <div className="fixed inset-0 pointer-events-none bg-vignette z-0" />
         <div className="fixed inset-0 pointer-events-none bg-grain z-0" />
-        
+
         <div className="relative z-10 w-full min-h-screen flex flex-col">
           {children}
         </div>
