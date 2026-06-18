@@ -1,13 +1,5 @@
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 
-export async function getCaptcha(theme: 'green' | 'cyan' = 'green') {
-  const res = await fetch(`${API_URL}/auth/captcha?theme=${theme}`);
-  if (!res.ok) {
-    throw new Error('Failed to fetch CAPTCHA');
-  }
-  return res.json(); // { token, svg }
-}
-
 export async function login(data: any) {
 
   const res = await fetch(`${API_URL}/auth/login`, {

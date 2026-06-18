@@ -72,14 +72,14 @@ export default function ProfilePage() {
         <h1 className="text-3xl font-serif font-light tracking-widest text-lux-creme uppercase">
           {c.title}
         </h1>
-        <p className="text-[10px] font-mono tracking-[0.25em] text-lux-creme-dim mt-1 uppercase">
+        <p className="text-[10px] tracking-[0.25em] text-lux-creme-dim mt-1 uppercase">
           {c.subtitle}
         </p>
       </div>
 
       {notification && (
         <div 
-          className={`border p-4 text-xs font-mono flex items-center gap-3 ${
+          className={`border p-4 text-xs flex items-center gap-3 ${
             notification.type === 'error' 
               ? 'bg-lux-copper/10 border-lux-copper/40 text-lux-copper' 
               : 'bg-lux-gold/10 border-lux-gold/45 text-lux-gold'
@@ -102,27 +102,27 @@ export default function ProfilePage() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {/* Alias name */}
             <div className="space-y-2">
-              <label className="text-[10px] font-mono tracking-widest text-lux-creme-dim flex items-center gap-2 uppercase">
+              <label className="text-[10px] tracking-widest text-lux-creme-dim flex items-center gap-2 uppercase">
                 <User className="w-3.5 h-3.5 text-lux-gold" /> {c.labelName}
               </label>
               <input 
                 type="text" 
                 value={formData.name}
                 onChange={(e) => setFormData({...formData, name: e.target.value})}
-                className="w-full bg-lux-bg/40 border border-lux-border p-3.5 font-mono text-sm text-lux-creme focus:border-lux-gold/50 focus:outline-none transition-all duration-300"
+                className="w-full bg-lux-bg/40 border border-lux-border p-3.5 text-sm text-lux-creme focus:border-lux-gold/50 focus:outline-none transition-all duration-300"
               />
             </div>
 
             {/* Comms addr */}
             <div className="space-y-2">
-              <label className="text-[10px] font-mono tracking-widest text-lux-creme-dim flex items-center gap-2 uppercase">
+              <label className="text-[10px] tracking-widest text-lux-creme-dim flex items-center gap-2 uppercase">
                 <Mail className="w-3.5 h-3.5 text-lux-gold" /> {c.labelEmail}
               </label>
               <input 
                 type="email" 
                 value={formData.email}
                 onChange={(e) => setFormData({...formData, email: e.target.value})}
-                className="w-full bg-lux-bg/40 border border-lux-border p-3.5 font-mono text-sm text-lux-creme focus:border-lux-gold/50 focus:outline-none transition-all duration-300"
+                className="w-full bg-lux-bg/40 border border-lux-border p-3.5 text-sm text-lux-creme focus:border-lux-gold/50 focus:outline-none transition-all duration-300"
               />
             </div>
           </div>
@@ -136,28 +136,28 @@ export default function ProfilePage() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {/* New Password */}
               <div className="space-y-2">
-                <label className="text-[10px] font-mono tracking-widest text-lux-creme-dim flex items-center gap-2 uppercase">
+                <label className="text-[10px] tracking-widest text-lux-creme-dim flex items-center gap-2 uppercase">
                   {c.labelNewPassword}
                 </label>
                 <input 
                   type="password" 
                   value={formData.password}
                   onChange={(e) => setFormData({...formData, password: e.target.value})}
-                  className="w-full bg-lux-bg/40 border border-lux-border p-3.5 font-mono text-sm text-lux-creme focus:border-lux-gold/50 focus:outline-none transition-all duration-300"
+                  className="w-full bg-lux-bg/40 border border-lux-border p-3.5 text-sm text-lux-creme focus:border-lux-gold/50 focus:outline-none transition-all duration-300"
                   placeholder={c.placeholderNewPassword}
                 />
               </div>
               
               {/* Confirm Password */}
               <div className="space-y-2">
-                <label className="text-[10px] font-mono tracking-widest text-lux-creme-dim flex items-center gap-2 uppercase">
+                <label className="text-[10px] tracking-widest text-lux-creme-dim flex items-center gap-2 uppercase">
                   {c.labelConfirmPassword}
                 </label>
                 <input 
                   type="password" 
                   value={formData.confirmPassword}
                   onChange={(e) => setFormData({...formData, confirmPassword: e.target.value})}
-                  className="w-full bg-lux-bg/40 border border-lux-border p-3.5 font-mono text-sm text-lux-creme focus:border-lux-gold/50 focus:outline-none transition-all duration-300"
+                  className="w-full bg-lux-bg/40 border border-lux-border p-3.5 text-sm text-lux-creme focus:border-lux-gold/50 focus:outline-none transition-all duration-300"
                   placeholder={c.placeholderConfirmPassword}
                 />
               </div>
@@ -169,7 +169,7 @@ export default function ProfilePage() {
             <button 
               type="submit"
               disabled={isSaving}
-              className="border border-lux-gold/30 bg-lux-card hover:bg-lux-gold hover:text-lux-bg px-8 py-3.5 font-mono text-xs tracking-[0.2em] font-bold uppercase transition-all duration-500 disabled:opacity-50 flex items-center gap-2"
+              className="border border-lux-gold/30 bg-lux-card hover:bg-lux-gold hover:text-lux-bg px-8 py-3.5 text-xs tracking-[0.2em] font-bold uppercase transition-all duration-500 disabled:opacity-50 flex items-center gap-2"
             >
               <Save className="w-4 h-4" />
               {isSaving ? c.buttonLoading : c.buttonSave}

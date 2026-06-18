@@ -22,7 +22,7 @@ export default function LanguageChart({ files }: LanguageChartProps) {
       <h3 className="text-xs font-serif font-light border-b border-lux-border pb-2 uppercase tracking-widest text-lux-gold">
         {c.langTitle}
       </h3>
-      <div className="space-y-3 text-xs font-mono">
+      <div className="space-y-3 text-xs">
         {Object.entries(langCounts)
           .sort((a, b) => b[1] - a[1])
           .map(([lang, count]) => {

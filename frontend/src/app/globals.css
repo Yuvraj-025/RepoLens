@@ -23,7 +23,7 @@
   body {
     background-color: var(--color-lux-bg);
     color: var(--color-lux-creme);
-    font-family: var(--font-marcellus), system-ui, -apple-system, sans-serif;
+    font-family: var(--font-cormorant), Georgia, Cambria, "Times New Roman", Times, serif;
     -webkit-font-smoothing: antialiased;
     overflow-x: hidden;
     min-height: 100vh;

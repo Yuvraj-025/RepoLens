@@ -12,13 +12,13 @@ import { copyContent } from '@/lib/content';
 
 const formatMarkdown = (text: string) => {
   if (!text) return '';
-  
+
   // 1. Escape HTML
   let escaped = text
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;');
-  
+
   // 2. Extract code blocks and store them
   const codeBlocks: string[] = [];
   escaped = escaped.replace(/```(\w*)\s*\r?\n([\s\S]*?)(?:\r?\n)?```/g, (_, lang, code) => {
@@ -51,6 +51,7 @@ export default function DashboardPage() {
   const [isUploadingFile, setIsUploadingFile] = useState(false);
   const [githubUrl, setGithubUrl] = useState('');
   const [isImportingGithub, setIsImportingGithub] = useState(false);
+  const [isDraggingOver, setIsDraggingOver] = useState(false);
   const fileInputRef = React.useRef<HTMLInputElement>(null);
 
   const [activeIngestionRepoId, setActiveIngestionRepoId] = useState<string | null>(null);
@@ -191,11 +192,7 @@ export default function DashboardPage() {
     }
   };
 
-  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (!e.target.files || e.target.files.length === 0) return;
-
-    const file = e.target.files[0];
-
+  const processFile = async (file: File) => {
     if (file.type !== 'application/zip' && file.type !== 'application/x-zip-compressed' && !file.name.endsWith('.zip')) {
       setUploadError('Invalid file type. Only ZIP files are allowed.');
       return;
@@ -220,6 +217,31 @@ export default function DashboardPage() {
         setUploadError(err.message || 'Upload failed');
       }
       setIsUploadingFile(false);
+    }
+  };
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!e.target.files || e.target.files.length === 0) return;
+    processFile(e.target.files[0]);
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    if (isUploadingFile || isImportingGithub) return;
+    setIsDraggingOver(true);
+  };
+
+  const handleDragLeave = () => {
+    setIsDraggingOver(false);
+  };
+
+  const handleDrop = async (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDraggingOver(false);
+    if (isUploadingFile || isImportingGithub) return;
+
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      processFile(e.dataTransfer.files[0]);
     }
   };
 
@@ -291,14 +313,14 @@ export default function DashboardPage() {
           <h1 className="text-3xl md:text-4xl font-serif font-light tracking-widest text-lux-creme uppercase">
             {c.title}
           </h1>
-          <p className="text-[10px] font-mono tracking-[0.25em] text-lux-creme-dim uppercase">
+          <p className="text-[10px] tracking-[0.25em] text-lux-creme-dim uppercase">
             {isLoading ? c.subtitleScanning : c.subtitleSynchronized(repos.length)}
           </p>
         </div>
 
         <button
           onClick={() => setIsUploading(true)}
-          className="w-full sm:w-auto border border-lux-gold/30 bg-lux-card hover:bg-lux-gold hover:text-lux-bg px-6 py-3 font-mono text-xs tracking-widest font-bold uppercase transition-all duration-500 flex items-center justify-center gap-2"
+          className="w-full sm:w-auto border border-lux-gold/30 bg-lux-card hover:bg-lux-gold hover:text-lux-bg px-6 py-3 text-xs tracking-widest font-bold uppercase transition-all duration-500 flex items-center justify-center gap-2"
         >
           <Upload className="w-4 h-4" />
           <span>{c.buttonUploadZip}</span>
@@ -307,18 +329,18 @@ export default function DashboardPage() {
 
       {/* Sleek Search Interface */}
       <div className="border border-lux-border p-4 bg-lux-card/25 backdrop-blur-md flex items-center gap-3">
-        <span className="text-[10px] font-mono tracking-widest text-lux-gold uppercase">{c.searchLabel}</span>
+        <span className="text-[10px] tracking-widest text-lux-gold uppercase">{c.searchLabel}</span>
         <input
           type="text"
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
           placeholder={c.searchPlaceholder}
-          className="bg-transparent border-b border-lux-border/60 focus:border-lux-gold/50 text-lux-creme text-sm outline-none font-mono flex-1 uppercase placeholder-lux-creme-dim/30 py-1 transition-colors duration-300"
+          className="bg-transparent border-b border-lux-border/60 focus:border-lux-gold/50 text-lux-creme text-sm outline-none flex-1 uppercase placeholder-lux-creme-dim/30 py-1 transition-colors duration-300"
         />
         {searchQuery && (
           <button
             onClick={() => setSearchQuery('')}
-            className="text-lux-creme-dim hover:text-lux-gold text-[10px] font-mono border border-lux-border px-2.5 py-1 uppercase"
+            className="text-lux-creme-dim hover:text-lux-gold text-[10px] border border-lux-border px-2.5 py-1 uppercase"
           >
             {c.searchClear}
           </button>
@@ -329,7 +351,7 @@ export default function DashboardPage() {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
         {filteredRepos.length === 0 ? (
           <div className="col-span-full border border-dashed border-lux-border/80 p-12 text-center bg-lux-card/5 animate-fade-in">
-            <p className="text-xs font-mono text-lux-creme-dim uppercase tracking-widest">{c.emptyCatalog}</p>
+            <p className="text-xs text-lux-creme-dim uppercase tracking-widest">{c.emptyCatalog}</p>
           </div>
         ) : (
           filteredRepos.map((repo) => (
@@ -370,7 +392,7 @@ export default function DashboardPage() {
                 </h3>
 
                 {repo.status === 'error' && (
-                  <div className="mb-4 text-[10px] font-mono text-red-400 border border-red-500/25 bg-red-950/10 px-2 py-1.5 uppercase tracking-wider flex items-center gap-1.5">
+                  <div className="mb-4 text-[10px] text-red-400 border border-red-500/25 bg-red-950/10 px-2 py-1.5 uppercase tracking-wider flex items-center gap-1.5">
                     <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0" />
                     <span>
                       {repo.chunkCount > 0
@@ -380,7 +402,7 @@ export default function DashboardPage() {
                   </div>
                 )}
 
-                <div className="space-y-3 text-xs font-mono mb-8 flex-1">
+                <div className="space-y-3 text-xs mb-8 flex-1">
                   <div className="flex justify-between border-b border-lux-border/30 pb-1.5">
                     <span className="text-lux-creme-dim uppercase">{c.cardPrimaryLang}</span>
                     <span className="text-lux-creme">{repo.primaryLanguage || 'Unknown'}</span>
@@ -395,7 +417,7 @@ export default function DashboardPage() {
                   </div>
                 </div>
 
-                <div className="text-[9px] font-mono text-lux-creme-dim opacity-60 mt-auto border-t border-lux-border/30 pt-3">
+                <div className="text-[9px] text-lux-creme-dim opacity-60 mt-auto border-t border-lux-border/30 pt-3">
                   {c.cardIndexedLabel} // {new Date(repo.createdAt).toLocaleDateString()} {new Date(repo.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                 </div>
               </div>
@@ -406,18 +428,18 @@ export default function DashboardPage() {
 
       {/* ZIP Upload Modal */}
       {isUploading && (
-        <div className="fixed inset-0 bg-lux-bg/85 backdrop-blur-md flex items-center justify-center z-50 p-4 animate-fade-in">
+        <div className="fixed inset-0 bg-lux-bg/85 backdrop-blur-md flex items-center justify-center z-[100] p-4 animate-fade-in">
           <div className="border border-lux-border bg-lux-card p-5 sm:p-8 max-w-2xl w-full shadow-lux space-y-6 sm:space-y-8 animate-reveal-up">
             <div className="flex justify-between items-start border-b border-lux-border pb-4">
               <div className="space-y-1">
                 <h2 className="text-2xl font-serif font-light tracking-widest text-lux-creme uppercase">
                   {activeIngestionRepo ? 'Ingestion In Progress' : c.modalUploadTitle}
                 </h2>
-                <p className="text-[9px] font-mono tracking-widest text-lux-creme-dim uppercase text-lux-gold">
+                <p className="text-[9px] tracking-widest text-lux-creme-dim uppercase text-lux-gold">
                   {activeIngestionRepo ? `Deconstructing ${activeIngestionRepo.name}` : c.modalUploadSubtitle}
                 </p>
               </div>
-              <button 
+              <button
                 onClick={() => {
                   if (isUploadingFile || isImportingGithub || activeIngestionRepoId) return;
                   setIsUploading(false);
@@ -430,9 +452,9 @@ export default function DashboardPage() {
                 <X className="w-5 h-5" />
               </button>
             </div>
-            
+
             {uploadError && (
-              <div className="bg-lux-copper/10 border border-lux-copper/45 text-lux-copper p-4 text-xs font-mono flex items-center gap-3">
+              <div className="bg-lux-copper/10 border border-lux-copper/45 text-lux-copper p-4 text-xs flex items-center gap-3">
                 <AlertTriangle className="w-4 h-4 flex-shrink-0" />
                 <span>{uploadError}</span>
               </div>
@@ -440,56 +462,28 @@ export default function DashboardPage() {
 
             {activeIngestionRepo ? (
               <div className="space-y-6">
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                  {/* Step 1: Upload */}
-                  <div className="border border-lux-border p-3 sm:p-4 bg-lux-bg/40 flex flex-col justify-between h-22 sm:h-28">
+                <div>
+                  {/* Embedding Progress */}
+                  <div className="border border-lux-border p-4 bg-lux-bg/40 flex flex-col justify-between h-24 sm:h-28">
                     <div className="flex justify-between items-center">
-                      <span className="text-[9px] font-mono text-lux-gold tracking-widest uppercase font-bold">01 // UPLOAD</span>
-                      <span className="text-[8px] font-mono text-emerald-400 border border-emerald-500/30 px-1.5 py-0.5 uppercase font-bold">Success</span>
-                    </div>
-                    <p className="text-xs font-serif text-lux-creme font-light uppercase tracking-wider">Archive Ingested</p>
-                    <p className="text-[10px] font-mono text-lux-creme-dim uppercase">
-                      Files: <span className="text-lux-gold font-bold">{activeIngestionRepo.fileCount}</span>
-                    </p>
-                  </div>
-
-                  {/* Step 2: Chunking */}
-                  <div className="border border-lux-border p-3 sm:p-4 bg-lux-bg/40 flex flex-col justify-between h-22 sm:h-28">
-                    <div className="flex justify-between items-center">
-                      <span className="text-[9px] font-mono text-lux-gold tracking-widest uppercase font-bold">02 // CHUNKING</span>
-                      {activeIngestionRepo.chunkCount > 0 ? (
-                        <span className="text-[8px] font-mono text-emerald-400 border border-emerald-500/30 px-1.5 py-0.5 uppercase font-bold">Success</span>
-                      ) : (
-                        <span className="text-[8px] font-mono text-lux-copper border border-lux-copper/30 px-1.5 py-0.5 uppercase animate-pulse">Running</span>
-                      )}
-                    </div>
-                    <p className="text-xs font-serif text-lux-creme font-light uppercase tracking-wider">Code Chunked</p>
-                    <p className="text-[10px] font-mono text-lux-creme-dim uppercase">
-                      Chunks: <span className="text-lux-gold font-bold">{activeIngestionRepo.chunkCount || 0}</span>
-                    </p>
-                  </div>
-
-                  {/* Step 3: Embedding */}
-                  <div className="border border-lux-border p-3 sm:p-4 bg-lux-bg/40 flex flex-col justify-between h-22 sm:h-28">
-                    <div className="flex justify-between items-center">
-                      <span className="text-[9px] font-mono text-lux-gold tracking-widest uppercase font-bold">03 // EMBEDDING</span>
+                      <span className="text-[9px] text-lux-gold tracking-widest uppercase font-bold">EMBEDDING PROGRESS</span>
                       {activeIngestionRepo.embeddedCount === activeIngestionRepo.chunkCount && activeIngestionRepo.chunkCount > 0 ? (
-                        <span className="text-[8px] font-mono text-emerald-400 border border-emerald-500/30 px-1.5 py-0.5 uppercase font-bold">Success</span>
+                        <span className="text-[8px] text-emerald-400 border border-emerald-500/30 px-1.5 py-0.5 uppercase font-bold">Success</span>
                       ) : activeIngestionRepo.chunkCount > 0 ? (
-                        <span className="text-[8px] font-mono text-lux-copper border border-lux-copper/30 px-1.5 py-0.5 uppercase animate-pulse">Running</span>
+                        <span className="text-[8px] text-lux-copper border border-lux-copper/30 px-1.5 py-0.5 uppercase animate-pulse">Running</span>
                       ) : (
-                        <span className="text-[8px] font-mono text-lux-creme-dim/40 border border-lux-border/30 px-1.5 py-0.5 uppercase">Awaiting</span>
+                        <span className="text-[8px] text-lux-creme-dim/40 border border-lux-border/30 px-1.5 py-0.5 uppercase">Awaiting</span>
                       )}
                     </div>
-                    <p className="text-xs font-serif text-lux-creme font-light uppercase tracking-wider">Gemini Context</p>
-                    <p className="text-[10px] font-mono text-lux-creme-dim uppercase">
+                    <p className="text-xs font-serif text-lux-creme font-light uppercase tracking-wider mt-1.5">Gemini Context Map</p>
+                    <p className="text-[10px] text-lux-creme-dim uppercase">
                       Embedded: <span className="text-lux-gold font-bold">{activeIngestionRepo.embeddedCount || 0}</span> / <span className="opacity-60">{activeIngestionRepo.chunkCount || '...'}</span>
                     </p>
                   </div>
                 </div>
 
                 <div className="space-y-3 pt-2">
-                  <div className="flex justify-between items-center font-mono text-[9px] text-lux-creme-dim uppercase tracking-wider">
+                  <div className="flex justify-between items-center text-[9px] text-lux-creme-dim uppercase tracking-wider">
                     <span>RAG Map Synthesis</span>
                     <span>
                       {activeIngestionRepo.chunkCount > 0
@@ -498,20 +492,19 @@ export default function DashboardPage() {
                     </span>
                   </div>
                   <div className="w-full bg-lux-bg/60 border border-lux-border h-3.5 flex p-[2px]">
-                    <div 
+                    <div
                       className="bg-lux-gold transition-all duration-500 h-full"
-                      style={{ 
-                        width: `${
-                          activeIngestionRepo.chunkCount > 0
+                      style={{
+                        width: `${activeIngestionRepo.chunkCount > 0
                             ? Math.min(Math.round(((activeIngestionRepo.embeddedCount || 0) / activeIngestionRepo.chunkCount) * 100), 100)
                             : 0
-                        }%` 
+                          }%`
                       }}
                     />
                   </div>
                 </div>
 
-                <div className="bg-[#12100f] border border-lux-border p-3 h-28 overflow-y-auto font-mono text-[9px] text-lux-creme-dim space-y-1.5 scrollbar-thin">
+                <div className="bg-[#12100f] border border-lux-border p-3 h-28 overflow-y-auto text-[9px] text-lux-creme-dim space-y-1.5 scrollbar-thin">
                   <p className="text-lux-gold">&gt; Archive ingested: {activeIngestionRepo.fileCount} files identified.</p>
                   {activeIngestionRepo.chunkCount > 0 ? (
                     <>
@@ -534,36 +527,42 @@ export default function DashboardPage() {
               </div>
             ) : (
               <>
-                <div 
-                  className={`border border-dashed border-lux-border p-12 flex flex-col items-center justify-center text-center cursor-pointer transition-all duration-300 ${isUploadingFile || isImportingGithub
-                      ? 'opacity-40 pointer-events-none'
-                      : 'hover:border-lux-gold/40 hover:bg-lux-bg/40'
+                <div
+                  className={`border border-dashed p-12 flex flex-col items-center justify-center text-center cursor-pointer transition-all duration-300 ${isUploadingFile || isImportingGithub
+                      ? 'border-lux-border opacity-40 pointer-events-none'
+                      : isDraggingOver
+                        ? 'border-lux-gold bg-lux-gold/10'
+                        : 'border-lux-border hover:border-lux-gold/40 hover:bg-lux-bg/40'
                     }`}
                   onClick={() => fileInputRef.current?.click()}
+                  onDragOver={handleDragOver}
+                  onDragLeave={handleDragLeave}
+                  onDrop={handleDrop}
                 >
                   <Upload className={`w-12 h-12 text-lux-gold mb-4 ${isUploadingFile ? 'animate-bounce' : 'opacity-70'}`} />
-                  <p className="text-sm font-mono tracking-wide text-lux-creme mb-1">
+                  <p className="text-sm tracking-wide text-lux-creme mb-1">
                     {isUploadingFile ? c.dropzoneLoading : c.dropzoneText}
                   </p>
-                  <p className="text-[10px] font-mono text-lux-creme-dim">{c.dropzoneSizeNote}</p>
-                  <input 
-                    type="file" 
-                    accept=".zip,application/zip" 
-                    className="hidden" 
+                  <p className="text-[10px] text-lux-creme-dim">{c.dropzoneSizeNote}</p>
+                  <p className="text-xs text-lux-copper mt-2 font-bold tracking-wide">{c.dropzoneExcludeNote}</p>
+                  <input
+                    type="file"
+                    accept=".zip,application/zip"
+                    className="hidden"
                     ref={fileInputRef}
                     onChange={handleFileChange}
                   />
                 </div>
-                
+
                 <div className="flex items-center gap-4">
                   <div className="flex-1 border-t border-lux-border"></div>
-                  <span className="text-[10px] font-mono text-lux-creme-dim font-bold uppercase tracking-widest">or</span>
+                  <span className="text-[10px] text-lux-creme-dim font-bold uppercase tracking-widest">or</span>
                   <div className="flex-1 border-t border-lux-border"></div>
                 </div>
 
                 {/* GitHub Import Section */}
                 <form onSubmit={handleGithubImport} className="space-y-3">
-                  <label className="block text-[10px] font-mono tracking-widest text-lux-creme-dim uppercase">
+                  <label className="block text-[10px] tracking-widest text-lux-creme-dim uppercase">
                     {c.githubLabel}
                   </label>
                   <div className="flex flex-col sm:flex-row gap-4">
@@ -575,13 +574,13 @@ export default function DashboardPage() {
                         onChange={(e) => setGithubUrl(e.target.value)}
                         placeholder={c.githubPlaceholder}
                         disabled={isUploadingFile || isImportingGithub}
-                        className="bg-transparent text-lux-creme text-sm outline-none font-mono flex-1 placeholder-lux-creme-dim/30"
+                        className="bg-transparent text-lux-creme text-sm outline-none flex-1 placeholder-lux-creme-dim/30"
                       />
                     </div>
                     <button
                       type="submit"
                       disabled={!githubUrl.trim() || isUploadingFile || isImportingGithub}
-                      className="border border-lux-gold/30 bg-lux-bg hover:bg-lux-gold hover:text-lux-bg px-6 py-3 font-mono text-xs tracking-widest font-bold uppercase transition-all duration-500 disabled:opacity-50"
+                      className="border border-lux-gold/30 bg-lux-bg hover:bg-lux-gold hover:text-lux-bg px-6 py-3 text-xs tracking-widest font-bold uppercase transition-all duration-500 disabled:opacity-50"
                     >
                       {isImportingGithub ? c.githubImportLoading : c.githubImportButton}
                     </button>
@@ -589,7 +588,7 @@ export default function DashboardPage() {
                 </form>
 
                 <div className="flex justify-end gap-4 border-t border-lux-border pt-4">
-                  <button 
+                  <button
                     onClick={() => {
                       if (isUploadingFile || isImportingGithub) return;
                       setIsUploading(false);
@@ -597,7 +596,7 @@ export default function DashboardPage() {
                       setGithubUrl('');
                     }}
                     disabled={isUploadingFile || isImportingGithub}
-                    className="border border-lux-border text-lux-creme-dim px-6 py-2.5 font-mono text-xs tracking-widest uppercase hover:text-lux-creme transition-colors duration-300 disabled:opacity-50"
+                    className="border border-lux-border text-lux-creme-dim px-6 py-2.5 text-xs tracking-widest uppercase hover:text-lux-creme transition-colors duration-300 disabled:opacity-50"
                   >
                     {c.modalCancelButton}
                   </button>
@@ -611,25 +610,25 @@ export default function DashboardPage() {
 
       {/* Delete Confirmation Modal */}
       {repoToDelete && (
-        <div className="fixed inset-0 bg-lux-bg/85 backdrop-blur-md flex items-center justify-center z-50 p-4 animate-fade-in">
+        <div className="fixed inset-0 bg-lux-bg/85 backdrop-blur-md flex items-center justify-center z-[100] p-4 animate-fade-in">
           <div className="border border-red-500/30 bg-lux-card p-8 max-w-lg w-full shadow-lux space-y-6 animate-reveal-up">
             <h2 className="text-xl font-serif font-light tracking-widest text-red-400 uppercase border-b border-red-500/20 pb-3 flex items-center gap-2.5">
               <AlertTriangle className="text-red-400" /> {c.deleteTitle}
             </h2>
-            <p className="text-xs font-mono text-red-200/70 leading-relaxed">
+            <p className="text-xs text-red-200/70 leading-relaxed">
               {c.deleteWarning}
             </p>
             <div className="flex justify-end gap-4 border-t border-lux-border pt-4">
               <button
                 onClick={() => setRepoToDelete(null)}
-                className="border border-lux-border text-lux-creme-dim px-6 py-2.5 font-mono text-xs tracking-widest uppercase hover:text-lux-creme transition-colors duration-300"
+                className="border border-lux-border text-lux-creme-dim px-6 py-2.5 text-xs tracking-widest uppercase hover:text-lux-creme transition-colors duration-300"
                 disabled={isDeleting}
               >
                 {c.deleteAbort}
               </button>
               <button
                 onClick={confirmDelete}
-                className="border border-red-500/35 bg-red-950/20 text-red-400 hover:bg-red-500 hover:text-lux-bg px-6 py-2.5 font-mono text-xs tracking-widest font-bold uppercase transition-all duration-500"
+                className="border border-red-500/35 bg-red-950/20 text-red-400 hover:bg-red-500 hover:text-lux-bg px-6 py-2.5 text-xs tracking-widest font-bold uppercase transition-all duration-500"
                 disabled={isDeleting}
               >
                 {isDeleting ? c.deleteConfirmLoading : c.deleteConfirm}
@@ -641,7 +640,7 @@ export default function DashboardPage() {
 
       {/* System Insights Modal Overlay */}
       {isInsightOpen && selectedRepoForInsights && (
-        <div className="fixed inset-0 z-50 bg-lux-bg/95 backdrop-blur-md p-4 md:p-12 flex flex-col animate-fade-in">
+        <div className="fixed inset-0 z-[100] bg-lux-bg/95 backdrop-blur-md p-4 md:p-12 flex flex-col animate-fade-in">
           {/* Header */}
           <div className="border border-lux-gold/30 bg-lux-card/40 p-4 sm:p-5 mb-4 sm:mb-8 flex justify-between items-center shadow-lux animate-reveal-up">
             <div className="flex items-center gap-3">
@@ -663,24 +662,22 @@ export default function DashboardPage() {
           </div>
 
           {/* Mobile Insight Tabs Switcher */}
-          <div className="flex md:hidden border border-lux-border mb-4 font-mono text-xs bg-lux-card/20">
+          <div className="flex md:hidden border border-lux-border mb-4 text-xs bg-lux-card/20">
             <button
               onClick={() => setActiveInsightTab('blueprint')}
-              className={`flex-1 py-3 text-center uppercase tracking-widest font-bold transition-all ${
-                activeInsightTab === 'blueprint'
+              className={`flex-1 py-3 text-center uppercase tracking-widest font-bold transition-all ${activeInsightTab === 'blueprint'
                   ? 'text-lux-gold bg-lux-card/40 border-b border-lux-gold'
                   : 'text-lux-creme-dim hover:text-lux-creme'
-              }`}
+                }`}
             >
               Blueprint
             </button>
             <button
               onClick={() => setActiveInsightTab('metrics')}
-              className={`flex-1 py-3 text-center uppercase tracking-widest font-bold transition-all ${
-                activeInsightTab === 'metrics'
+              className={`flex-1 py-3 text-center uppercase tracking-widest font-bold transition-all ${activeInsightTab === 'metrics'
                   ? 'text-lux-gold bg-lux-card/40 border-b border-lux-gold'
                   : 'text-lux-creme-dim hover:text-lux-creme'
-              }`}
+                }`}
             >
               Metrics
             </button>
@@ -690,14 +687,13 @@ export default function DashboardPage() {
           <div className="flex-1 flex flex-col md:flex-row gap-6 md:gap-8 min-h-0 overflow-y-auto animate-reveal-up delay-100">
 
             {/* AI Architecture Blueprint */}
-            <div className={`flex-1 md:flex-[0.65] border border-lux-border flex flex-col bg-lux-card/15 overflow-hidden ${
-              activeInsightTab === 'blueprint' ? 'flex' : 'hidden md:flex'
-            }`}>
+            <div className={`flex-1 md:flex-[0.65] border border-lux-border flex flex-col bg-lux-card/15 overflow-hidden ${activeInsightTab === 'blueprint' ? 'flex' : 'hidden md:flex'
+              }`}>
               <div className="border-b border-lux-border p-4 bg-lux-card/40">
-                <span className="text-[10px] font-mono tracking-widest text-lux-gold uppercase font-bold">{c.insightsAiBlueprint}</span>
+                <span className="text-[10px] tracking-widest text-lux-gold uppercase font-bold">{c.insightsAiBlueprint}</span>
               </div>
 
-              <div className="flex-1 overflow-y-auto p-8 text-lux-creme select-text leading-relaxed font-mono text-xs">
+              <div className="flex-1 overflow-y-auto p-8 text-lux-creme select-text leading-relaxed text-xs">
                 {isSummaryLoading ? (
                   <div className="flex flex-col items-center justify-center h-full space-y-4">
                     <div className="w-8 h-8 border-2 border-lux-gold border-t-transparent animate-spin" />
@@ -733,14 +729,13 @@ export default function DashboardPage() {
             </div>
 
             {/* Metrics Sidebar */}
-            <div className={`flex-1 md:flex-[0.35] border border-lux-border flex flex-col bg-lux-card/15 overflow-hidden ${
-              activeInsightTab === 'metrics' ? 'flex' : 'hidden md:flex'
-            }`}>
+            <div className={`flex-1 md:flex-[0.35] border border-lux-border flex flex-col bg-lux-card/15 overflow-hidden ${activeInsightTab === 'metrics' ? 'flex' : 'hidden md:flex'
+              }`}>
               <div className="border-b border-lux-border p-4 bg-lux-card/40">
-                <span className="text-[10px] font-mono tracking-widest text-lux-gold uppercase font-bold">{c.insightsMetrics}</span>
+                <span className="text-[10px] tracking-widest text-lux-gold uppercase font-bold">{c.insightsMetrics}</span>
               </div>
 
-              <div className="flex-1 overflow-y-auto p-6 space-y-8 font-mono text-xs text-lux-creme scrollbar-thin">
+              <div className="flex-1 overflow-y-auto p-6 space-y-8 text-xs text-lux-creme scrollbar-thin">
                 <StatsSummary
                   fileCount={selectedRepoForInsights.fileCount}
                   chunkCount={selectedRepoForInsights.chunkCount}

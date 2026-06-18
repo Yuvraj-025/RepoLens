@@ -1,20 +1,14 @@
-import { Controller, Post, Body, Get, Request, Patch, Query } from '@nestjs/common';
+import { Controller, Post, Body, Get, Request, Patch } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { SignupDto } from './dto/signup.dto';
 import { LoginDto } from './dto/login.dto';
 import { UpdateProfileDto } from './dto/update-profile.dto';
 import { Public } from '../../common/guards/public.decorator';
-import { generateCaptchaSvg } from './captcha.utils';
 
 @Controller('auth')
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
-  @Public()
-  @Get('captcha')
-  async getCaptcha(@Query('theme') theme: 'green' | 'cyan') {
-    return generateCaptchaSvg(theme || 'green');
-  }
 
 
   @Public()

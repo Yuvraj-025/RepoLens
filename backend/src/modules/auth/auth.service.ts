@@ -5,7 +5,6 @@ import * as bcrypt from 'bcrypt';
 import { SignupDto } from './dto/signup.dto';
 import { LoginDto } from './dto/login.dto';
 import { UpdateProfileDto } from './dto/update-profile.dto';
-import { verifyCaptcha } from './captcha.utils';
 
 @Injectable()
 export class AuthService {
@@ -15,10 +14,6 @@ export class AuthService {
   ) {}
 
   async signup(dto: SignupDto) {
-    // Verify CAPTCHA first
-    if (!verifyCaptcha(dto.captchaToken, dto.captchaCode)) {
-      throw new BadRequestException('CAPTCHA validation failed. Please try again.');
-    }
 
     const existingUser = await this.prisma.user.findUnique({ where: { email: dto.email } });
     if (existingUser) {
@@ -36,10 +31,6 @@ export class AuthService {
   }
 
   async login(dto: LoginDto) {
-    // Verify CAPTCHA first
-    if (!verifyCaptcha(dto.captchaToken, dto.captchaCode)) {
-      throw new BadRequestException('CAPTCHA validation failed. Please try again.');
-    }
 
     const user = await this.prisma.user.findUnique({ where: { email: dto.email } });
     if (!user) {

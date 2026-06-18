@@ -4,7 +4,6 @@ import React, { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { signup } from '@/lib/api/auth';
-import Captcha from '@/components/auth/Captcha';
 import { copyContent } from '@/lib/content';
 
 export default function SignupPage() {
@@ -14,28 +13,20 @@ export default function SignupPage() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [captchaToken, setCaptchaToken] = useState('');
-  const [captchaCode, setCaptchaCode] = useState('');
+
 
   const c = copyContent.signup;
 
-  const handleCaptchaChange = (token: string, code: string) => {
-    setCaptchaToken(token);
-    setCaptchaCode(code);
-  };
+
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!captchaCode) {
-      setError('Please solve the CAPTCHA first.');
-      return;
-    }
 
     setError('');
     setIsLoading(true);
     
     try {
-      const data = await signup({ name, email, password, captchaToken, captchaCode });
+      const data = await signup({ name, email, password });
       localStorage.setItem('accessToken', data.accessToken);
       router.push('/dashboard');
     } catch (err: any) {
@@ -57,7 +48,7 @@ export default function SignupPage() {
             {c.title}
           </h2>
           <div className="h-[1px] w-12 bg-lux-gold/40"></div>
-          <p className="text-xs font-mono text-lux-creme-dim flex flex-wrap gap-x-3 items-center">
+          <p className="text-xs text-lux-creme-dim flex flex-wrap gap-x-3 items-center">
             <span>{c.caption}</span>
             <span className="opacity-30">/</span>
             <Link href="/login" className="text-lux-gold hover:text-lux-creme transition-colors duration-300">
@@ -71,7 +62,7 @@ export default function SignupPage() {
         </header>
 
         {error && (
-          <div className="bg-lux-copper/10 border border-lux-copper/45 text-lux-copper p-4 text-xs font-mono mb-8">
+          <div className="bg-lux-copper/10 border border-lux-copper/45 text-lux-copper p-4 text-xs mb-8">
             &gt; ERROR: {error}
           </div>
         )}
@@ -80,7 +71,7 @@ export default function SignupPage() {
           
           {/* Alias Field */}
           <div className="space-y-2">
-            <label htmlFor="name" className="block text-[10px] font-mono tracking-widest text-lux-creme-dim uppercase">
+            <label htmlFor="name" className="block text-[10px] tracking-widest text-lux-creme-dim uppercase">
               {c.labelAlias}
             </label>
             <input 
@@ -90,14 +81,14 @@ export default function SignupPage() {
               required 
               value={name} 
               onChange={(e) => setName(e.target.value)}
-              className="w-full bg-lux-bg/40 border border-lux-border p-3.5 font-mono text-sm text-lux-creme focus:border-lux-gold/50 focus:outline-none transition-all duration-300" 
+              className="w-full bg-lux-bg/40 border border-lux-border p-3.5 text-sm text-lux-creme focus:border-lux-gold/50 focus:outline-none transition-all duration-300" 
               placeholder={c.placeholderAlias} 
             />
           </div>
 
           {/* Email Field */}
           <div className="space-y-2">
-            <label htmlFor="email" className="block text-[10px] font-mono tracking-widest text-lux-creme-dim uppercase">
+            <label htmlFor="email" className="block text-[10px] tracking-widest text-lux-creme-dim uppercase">
               {c.labelEmail}
             </label>
             <input 
@@ -107,14 +98,14 @@ export default function SignupPage() {
               required 
               value={email} 
               onChange={(e) => setEmail(e.target.value)}
-              className="w-full bg-lux-bg/40 border border-lux-border p-3.5 font-mono text-sm text-lux-creme focus:border-lux-gold/50 focus:outline-none transition-all duration-300" 
+              className="w-full bg-lux-bg/40 border border-lux-border p-3.5 text-sm text-lux-creme focus:border-lux-gold/50 focus:outline-none transition-all duration-300" 
               placeholder={c.placeholderEmail} 
             />
           </div>
 
           {/* Password Field */}
           <div className="space-y-2">
-            <label htmlFor="password" className="block text-[10px] font-mono tracking-widest text-lux-creme-dim uppercase">
+            <label htmlFor="password" className="block text-[10px] tracking-widest text-lux-creme-dim uppercase">
               {c.labelPassword}
             </label>
             <input 
@@ -124,21 +115,18 @@ export default function SignupPage() {
               required 
               value={password} 
               onChange={(e) => setPassword(e.target.value)}
-              className="w-full bg-lux-bg/40 border border-lux-border p-3.5 font-mono text-sm text-lux-creme focus:border-lux-gold/50 focus:outline-none transition-all duration-300" 
+              className="w-full bg-lux-bg/40 border border-lux-border p-3.5 text-sm text-lux-creme focus:border-lux-gold/50 focus:outline-none transition-all duration-300" 
               placeholder="••••••••" 
             />
           </div>
 
-          {/* Captcha */}
-          <div className="pt-2">
-            <Captcha onCaptchaChange={handleCaptchaChange} colorTheme="cyan" />
-          </div>
+
           
           <div className="pt-6">
             <button 
               type="submit" 
               disabled={isLoading} 
-              className="w-full border border-lux-gold/30 bg-lux-card hover:bg-lux-gold hover:text-lux-bg p-4 font-mono text-xs tracking-[0.2em] font-bold uppercase transition-all duration-500 disabled:opacity-50"
+              className="w-full border border-lux-gold/30 bg-lux-card hover:bg-lux-gold hover:text-lux-bg p-4 text-xs tracking-[0.2em] font-bold uppercase transition-all duration-500 disabled:opacity-50"
             >
               {isLoading ? c.buttonLoading : c.buttonInitialize}
             </button>

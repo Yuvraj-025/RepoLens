@@ -34,7 +34,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   if (isAuthorized === null) {
     return (
-      <div className="flex h-screen w-full items-center justify-center bg-lux-bg font-mono">
+      <div className="flex h-screen w-full items-center justify-center bg-lux-bg">
         <span className="text-lux-gold animate-pulse text-xs tracking-widest uppercase">&gt; {c.confirmSession}</span>
       </div>
     );
@@ -152,7 +152,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       )}
 
       {/* Main Content Pane */}
-      <main className="flex-1 p-4 md:p-12 overflow-y-auto bg-lux-bg relative animate-fade-in">
+      <main className="flex-1 p-4 md:p-12 overflow-y-auto bg-lux-bg relative">
         {/* Subtle decorative framing */}
         <div className="absolute top-0 left-0 w-full h-[1px] bg-gradient-to-r from-lux-border via-lux-border/20 to-transparent"></div>
         {children}

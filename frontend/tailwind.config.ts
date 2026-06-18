@@ -26,7 +26,7 @@ const config: Config = {
         'retro-cyan': '#d1b894',
       },
       fontFamily: {
-        sans: ['var(--font-marcellus)', 'system-ui', 'sans-serif'],
+        sans: ['var(--font-cormorant)', 'Georgia', 'serif'],
         serif: ['var(--font-cormorant)', 'serif'],
         mono: ['var(--font-courier)', 'monospace'],
       },

@@ -13,12 +13,5 @@ export class SignupDto {
   @MinLength(6)
   password: string;
 
-  @IsNotEmpty()
-  @IsString()
-  captchaToken: string;
-
-  @IsNotEmpty()
-  @IsString()
-  captchaCode: string;
 }
 
