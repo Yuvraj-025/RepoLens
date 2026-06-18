@@ -47,7 +47,7 @@ export default function LoginPage() {
             {c.title}
           </h2>
           <div className="h-[1px] w-12 bg-lux-gold/40"></div>
-          <p className="text-xs text-lux-creme-dim flex flex-wrap gap-x-3 items-center">
+          <p className="text-sm text-lux-creme-dim flex flex-wrap gap-x-3 items-center">
             <span>{c.caption}</span>
             <span className="opacity-30">/</span>
             <Link href="/signup" className="text-lux-gold hover:text-lux-creme transition-colors duration-300">
@@ -71,7 +71,7 @@ export default function LoginPage() {
             
             {/* Email Field */}
             <div className="space-y-2">
-              <label htmlFor="email" className="block text-[10px] tracking-widest text-lux-creme-dim uppercase">
+              <label htmlFor="email" className="block text-xs tracking-widest text-lux-creme-dim uppercase">
                 {c.labelEmail}
               </label>
               <input 
@@ -81,14 +81,14 @@ export default function LoginPage() {
                 required 
                 value={email} 
                 onChange={(e) => setEmail(e.target.value)}
-                className="w-full bg-lux-bg/40 border border-lux-border p-3.5 text-sm text-lux-creme focus:border-lux-gold/50 focus:outline-none transition-all duration-300" 
+                className="w-full bg-lux-bg/40 border border-lux-border p-3.5 text-base text-lux-creme focus:border-lux-gold/50 focus:outline-none transition-all duration-300" 
                 placeholder={c.placeholderEmail} 
               />
             </div>
 
             {/* Password Field */}
             <div className="space-y-2">
-              <label htmlFor="password" className="block text-[10px] tracking-widest text-lux-creme-dim uppercase">
+              <label htmlFor="password" className="block text-xs tracking-widest text-lux-creme-dim uppercase">
                 {c.labelPassword}
               </label>
               <input 
@@ -98,7 +98,7 @@ export default function LoginPage() {
                 required 
                 value={password} 
                 onChange={(e) => setPassword(e.target.value)}
-                className="w-full bg-lux-bg/40 border border-lux-border p-3.5 text-sm text-lux-creme focus:border-lux-gold/50 focus:outline-none transition-all duration-300" 
+                className="w-full bg-lux-bg/40 border border-lux-border p-3.5 text-base text-lux-creme focus:border-lux-gold/50 focus:outline-none transition-all duration-300" 
                 placeholder="••••••••" 
               />
             </div>
@@ -111,7 +111,7 @@ export default function LoginPage() {
             <button 
               type="submit" 
               disabled={isLoading} 
-              className="w-full border border-lux-gold/30 bg-lux-card hover:bg-lux-gold hover:text-lux-bg p-4 text-xs tracking-[0.2em] font-bold uppercase transition-all duration-500 disabled:opacity-50"
+              className="w-full border border-lux-gold/30 bg-lux-card hover:bg-lux-gold hover:text-lux-bg p-4 text-sm tracking-[0.2em] font-bold uppercase transition-all duration-500 disabled:opacity-50"
             >
               {isLoading ? c.buttonLoading : c.buttonAuthenticate}
             </button>

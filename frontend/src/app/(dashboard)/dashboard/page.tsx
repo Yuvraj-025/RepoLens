@@ -417,7 +417,7 @@ export default function DashboardPage() {
                   </div>
                 </div>
 
-                <div className="text-[9px] text-lux-creme-dim opacity-60 mt-auto border-t border-lux-border/30 pt-3">
+                <div className="text-xs text-lux-creme-dim opacity-85 mt-auto border-t border-lux-border/30 pt-3">
                   {c.cardIndexedLabel} // {new Date(repo.createdAt).toLocaleDateString()} {new Date(repo.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                 </div>
               </div>
