@@ -285,10 +285,16 @@ export class RepositoryService {
     let buffer: Buffer;
     try {
       // Fetch public repository ZIP archive
+      const headers: Record<string, string> = {
+        'User-Agent': 'RepoLens-NestJS-Backend',
+      };
+
+      if (process.env.GITHUB_TOKEN) {
+        headers['Authorization'] = `token ${process.env.GITHUB_TOKEN}`;
+      }
+
       const response = await fetch(`https://api.github.com/repos/${owner}/${repo}/zipball`, {
-        headers: {
-          'User-Agent': 'RepoLens-NestJS-Backend',
-        },
+        headers,
       });
 
       if (!response.ok) {
